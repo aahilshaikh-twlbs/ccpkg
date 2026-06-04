@@ -1,0 +1,12 @@
+{
+  "items": [
+    {"path": "settings.json", "mode": "merge", "os": "any", "layer": "base"},
+    {"path": "settings.local.json.tmpl", "mode": "template", "os": "any", "layer": "base"},
+    {"path": "statusline.sh", "mode": "symlink", "os": "any", "layer": "base"},
+    {"path": "monthly-cost.sh", "mode": "symlink", "os": "any", "layer": "base"},
+    {"path": "yearly-cost.sh", "mode": "symlink", "os": "any", "layer": "base"},
+    {"path": "commands/create-prd.md", "mode": "symlink", "os": "any", "layer": "base"},
+    {"path": "commands/handoff.md", "mode": "symlink", "os": "any", "layer": "base"},
+    {"path": "skills/shannon", "mode": "symlink", "os": "any", "layer": "base"}
+  ]
+}

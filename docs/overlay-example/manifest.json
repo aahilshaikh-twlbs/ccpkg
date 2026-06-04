@@ -1,0 +1,16 @@
+{
+  "items": [
+    {
+      "path": "agents/sample-overlay-agent.md",
+      "mode": "template",
+      "os": "any",
+      "layer": "overlay"
+    },
+    {
+      "path": "settings.local.json.tmpl",
+      "mode": "template",
+      "os": "any",
+      "layer": "overlay"
+    }
+  ]
+}

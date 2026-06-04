@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# mailbox — thin shim that execs `python3 -m mailbox.cli` with the repo src on PYTHONPATH.
+# Contract §1 (bin/mailbox) and §12 (cli.py entrypoint).
+set -euo pipefail
+
+# Resolve the real path of this script, following a single symlink level so that
+# an installed symlink (~/.claude/mailbox/mailbox -> <repo>/bin/mailbox) still
+# points back at the repo's src/ directory. Assumes install.py (Contract §14)
+# uses an ABSOLUTE symlink target.
+SOURCE="${BASH_SOURCE[0]}"
+if [ -L "$SOURCE" ]; then
+  SOURCE="$(readlink "$SOURCE")"
+fi
+case "$SOURCE" in
+  /*) ;;                                   # already absolute
+  *)  SOURCE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "$SOURCE")" ;;
+esac
+SCRIPT_DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
+
+# Repo src is one level up from bin/ (e.g. <repo>/bin -> <repo>/src).
+SRC_DIR="$(cd "$SCRIPT_DIR/.." && pwd)/src"
+
+if [ -n "${PYTHONPATH:-}" ]; then
+  export PYTHONPATH="$SRC_DIR:$PYTHONPATH"
+else
+  export PYTHONPATH="$SRC_DIR"
+fi
+
+exec python3 -m mailbox.cli "$@"
