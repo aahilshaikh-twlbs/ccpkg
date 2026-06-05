@@ -60,6 +60,13 @@ def main():
             return 0
         flag = _flag_path(session_id)
 
+        if data.get("hook_event_name") == "SessionEnd":
+            try:
+                os.remove(flag)
+            except OSError:
+                pass
+            return 0
+
         prompt = data.get("prompt") or ""
         if SENTINEL in prompt or _ARM_RE.search(prompt):
             os.makedirs(_state_dir(), exist_ok=True)

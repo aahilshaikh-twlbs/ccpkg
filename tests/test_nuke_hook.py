@@ -104,3 +104,32 @@ def test_no_session_id_does_nothing(tmp_path):
     assert proc.returncode == 0
     assert proc.stdout.strip() == ""
     assert not (tmp_path / "nuke").exists()
+
+
+def test_session_end_clears_flag(tmp_path):
+    (tmp_path / "nuke").mkdir()
+    flag_for(tmp_path, "abc").write_text("on")
+    proc = run_hook(
+        {"hook_event_name": "SessionEnd", "session_id": "abc"},
+        tmp_path,
+    )
+    assert proc.returncode == 0
+    assert not flag_for(tmp_path, "abc").exists()
+
+
+def test_session_end_missing_flag_is_noop(tmp_path):
+    proc = run_hook(
+        {"hook_event_name": "SessionEnd", "session_id": "never-armed"},
+        tmp_path,
+    )
+    assert proc.returncode == 0
+
+
+def test_session_end_does_not_inject(tmp_path):
+    (tmp_path / "nuke").mkdir()
+    flag_for(tmp_path, "abc").write_text("on")
+    proc = run_hook(
+        {"hook_event_name": "SessionEnd", "session_id": "abc"},
+        tmp_path,
+    )
+    assert proc.stdout.strip() == ""
