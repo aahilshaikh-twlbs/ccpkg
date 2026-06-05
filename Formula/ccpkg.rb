@@ -5,8 +5,8 @@ class Ccpkg < Formula
   sha256 "0000000000000000000000000000000000000000000000000000000000000000"
   license "MIT"
 
-  depends_on "python@3.12"
   depends_on "jq"
+  depends_on "python@3.12"
 
   def install
     libexec.install "ccpkg", "manifest.json", "home", "mailbox", "install.sh", "LICENSE"
