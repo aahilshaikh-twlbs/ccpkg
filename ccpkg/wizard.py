@@ -18,8 +18,8 @@ _SETTINGS_WARNING = ("warning: settings.json deselected — "
 
 
 class WizardState:
-    def __init__(self, stages, preselected):
-        # type: (List[Stage], Set[str]) -> None
+    def __init__(self, stages, preselected, existing=False):
+        # type: (List[Stage], Set[str], bool) -> None
         self.stages = stages
         self.selected = set(preselected)
         self.stage_index = 0
@@ -27,6 +27,9 @@ class WizardState:
         self._done = False
         self._review = False
         self._intro = True
+        # True when a saved profile already exists (re-run / update), so the
+        # splash can say "existing install" instead of "fresh install".
+        self.existing = bool(existing)
 
     # --- queries -------------------------------------------------------
     def current_stage(self):
@@ -137,12 +140,21 @@ _HIDE_CURSOR = "\x1b[?25l"
 _SHOW_CURSOR = "\x1b[?25h"
 
 # Glyphs.
-_DOT_DONE = "●"      # ● completed/current stage
-_DOT_TODO = "○"      # ○ pending stage
+_DOT_DONE = "●"      # ● completed/current group
+_DOT_TODO = "○"      # ○ pending group
 _CHECK_ON = "[✓]"    # selected entry — brackets read as 'toggleable'
 _CHECK_OFF = "[ ]"   # unselected entry
 _POINTER = "▸"       # ▸ cursor
-_WORDMARK = "c c p k g"
+_BAR = "▌"           # ▌ group-header accent bar
+
+# Block wordmark for the splash. Five rows, letters c c p k g (4 cols + 1 gap).
+_WORDMARK_ART = [
+    "████ ████ ████ █  █ ████",
+    "█    █    █  █ █ █  █    ",
+    "█    █    ████ ██   █ ██ ",
+    "█    █    █    █ █  █  █  ",
+    "████ ████ █    █  █ ████ ",
+]
 
 
 class _Palette:
@@ -309,9 +321,10 @@ def _render_intro_numbered(state, out):
     out.flush()
 
 
-def _numbered_fallback(stages, preselected, in_stream, out_stream):
-    # type: (List[Stage], Set[str], object, object) -> Set[str]
-    state = WizardState(stages, preselected)
+def _numbered_fallback(stages, preselected, in_stream, out_stream,
+                       existing=False):
+    # type: (List[Stage], Set[str], object, object, bool) -> Set[str]
+    state = WizardState(stages, preselected, existing=existing)
     # The intro is display-only in the headless renderer (no extra input): show
     # the banner once, then drop straight into the first stage.
     if state.is_intro():
@@ -349,10 +362,11 @@ def _numbered_fallback(stages, preselected, in_stream, out_stream):
     return state.selected_ids()
 
 
-def run_wizard(stages, preselected, in_stream=None, out_stream=None):
-    # type: (List[Stage], Set[str], object, object) -> Set[str]
+def run_wizard(stages, preselected, in_stream=None, out_stream=None,
+               existing=False):
+    # type: (List[Stage], Set[str], object, object, bool) -> Set[str]
     """Collect a selection. Raw-mode TUI when both streams are a TTY; otherwise
-    the numbered fallback."""
+    the numbered fallback. `existing` marks a re-run (a saved profile exists)."""
     in_stream = in_stream if in_stream is not None else sys.stdin
     out_stream = out_stream if out_stream is not None else sys.stdout
     if not stages:
@@ -361,10 +375,13 @@ def run_wizard(stages, preselected, in_stream=None, out_stream=None):
         # KeyboardInterrupt (BaseException) propagates for a clean Ctrl-C; any
         # other failure (e.g. missing termios) degrades to the numbered renderer.
         try:
-            return _raw_mode_loop(stages, preselected, in_stream, out_stream)
+            return _raw_mode_loop(stages, preselected, in_stream, out_stream,
+                                  existing=existing)
         except Exception:
-            return _numbered_fallback(stages, preselected, in_stream, out_stream)
-    return _numbered_fallback(stages, preselected, in_stream, out_stream)
+            return _numbered_fallback(stages, preselected, in_stream, out_stream,
+                                      existing=existing)
+    return _numbered_fallback(stages, preselected, in_stream, out_stream,
+                              existing=existing)
 
 
 def _is_tty(stream):
@@ -377,18 +394,22 @@ def _is_tty(stream):
 
 def _render_intro_raw(state, out):
     # type: (WizardState, object) -> None
-    """Compact splash shown once before stage 0: wordmark, tagline, a one-line
-    orientation, and a begin/cancel footer."""
+    """Splash shown once before the first group: block wordmark, tagline,
+    install status, a one-line orientation, and a begin/cancel footer."""
     pal = _Palette(_color_enabled(out))
     width = _term_width(out)
     out.write(_CLEAR)
     _emit_top(out, "ccpkg", "welcome", width, pal)
     out.write("\r\n")
-    out.write("   %s  %s\r\n" % (pal.accent("▌"), pal.header(_WORDMARK)))
-    out.write("   %s\r\n\r\n" % pal.dim("Claude Code environment-as-code"))
+    for row in _WORDMARK_ART:
+        out.write("   %s\r\n" % pal.accent(row))
+    out.write("\r\n")
+    out.write("   %s\r\n" % pal.dim("Claude Code environment-as-code"))
     n = len(state.stages)
-    orient = ("%d stage%s · ↑↓ move · space toggles · ⏎ continues"
-              % (n, "" if n == 1 else "s"))
+    status = "existing install · %d group%s" if state.existing else \
+             "fresh install · %d group%s"
+    out.write("   %s\r\n\r\n" % pal.dim(status % (n, "" if n == 1 else "s")))
+    orient = "↑↓ move · space toggles · ⏎ continues · esc back"
     out.write("   %s\r\n\r\n" % pal.dim(orient))
     _emit_footer(out, "[ ⏎ begin ]", "[ esc cancel ]", width, pal)
     out.flush()
@@ -401,17 +422,19 @@ def _render_raw(state, out):
     stage = state.current_stage()
     out.write(_CLEAR)
     _emit_top(out, "ccpkg install",
-              "stage %d/%d · %s" % (state.stage_index + 1,
-                                    len(state.stages), stage.name),
+              "group %d/%d" % (state.stage_index + 1, len(state.stages)),
               width, pal)
     out.write("\r\n")
-    # Per-stage header: makes each section read as a distinct step.
+    # Prominent group header — an accent bar + the group name in bold, so each
+    # section is clearly its own grouping rather than a flat list.
     n_sel = sum(1 for e in stage.entries if state.is_selected(e.id))
     n_all = len(stage.entries)
-    subtitle = "%d option%s · %d selected" % (n_all, "" if n_all == 1 else "s",
-                                              n_sel)
-    out.write("  %s   %s\r\n" % (_stage_dots(state, pal), pal.dim(subtitle)))
-    hint = pal.dim("space toggle · ↑↓ move · ⏎ next · a all · n none · esc back")
+    out.write("  %s %s   %s\r\n" % (
+        pal.accent(_BAR), pal.header(stage.name),
+        pal.dim("%d option%s · %d selected"
+                % (n_all, "" if n_all == 1 else "s", n_sel))))
+    out.write("  %s\r\n\r\n" % _stage_dots(state, pal))
+    hint = pal.dim("space toggle · ↑↓ move · ⏎ next · ← → groups · a all · n none · esc back")
     out.write("  %s\r\n\r\n" % hint)
     col = _name_col_width(stage.entries)
     for i, e in enumerate(stage.entries):
@@ -461,11 +484,11 @@ def _read_key(in_stream):
     return _decode_key(first.decode("latin-1"))
 
 
-def _raw_mode_loop(stages, preselected, in_stream, out_stream):
-    # type: (List[Stage], Set[str], object, object) -> Set[str]
+def _raw_mode_loop(stages, preselected, in_stream, out_stream, existing=False):
+    # type: (List[Stage], Set[str], object, object, bool) -> Set[str]
     import termios
     import tty
-    state = WizardState(stages, preselected)
+    state = WizardState(stages, preselected, existing=existing)
     fd = in_stream.fileno()
     old = termios.tcgetattr(fd)
     out_stream.write(_HIDE_CURSOR)
@@ -483,12 +506,13 @@ def _raw_mode_loop(stages, preselected, in_stream, out_stream):
                 # EOF or Ctrl-C: abort. The finally below restores the terminal.
                 raise KeyboardInterrupt
             if state.is_intro():
-                if key == "enter":
+                if key in ("enter", "right"):
                     state.begin()
-                elif key in ("esc", "left"):
-                    # Esc on the splash cancels cleanly (terminal restored below).
+                elif key in ("esc", "q"):
+                    # Only Esc/q cancels on the splash (terminal restored below).
+                    # Arrow keys must NOT cancel — left/right just navigate.
                     raise KeyboardInterrupt
-                # ignore every other key on the intro screen
+                # ignore every other key (incl. lone 'left') on the intro
                 continue
             if state.is_review():
                 if key == "enter":
@@ -507,7 +531,7 @@ def _raw_mode_loop(stages, preselected, in_stream, out_stream):
                 state.select_all()
             elif key == "n":
                 state.select_none()
-            elif key == "enter":
+            elif key in ("enter", "right"):
                 state.next_stage()
             elif key in ("esc", "left"):
                 state.prev_stage()

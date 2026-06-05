@@ -53,19 +53,24 @@ plugins, installs the mailbox, scans for secrets/PII, and prints any re-auth ins
 is idempotent — re-running it converges to the same state.
 
 Run in a terminal, `ccpkg install` opens an interactive feature picker before applying
-anything. Features are grouped into staged screens (Core, Commands, Skills, Plugins,
-Coordination, and an Overlay stage when an overlay is configured). Use the arrow keys to move,
-space to toggle an item, Enter to advance, and Esc to go back. Your selection is saved to
-`~/.claude/.ccpkg-profile.json` and replayed automatically on later runs.
+anything. Features are grouped into screens (Core, Commands, Skills, Plugins, Coordination,
+Hooks, and an Overlay group when an overlay is configured). Use ↑/↓ to move, space to toggle,
+Enter to advance, ←/→ to move between groups, and Esc to go back; Esc on the welcome screen
+cancels. Your selection is saved to `~/.claude/.ccpkg-profile.json`.
+
+**Re-running `ccpkg install` is how you update** — it reopens the picker pre-ticked from your
+saved selection, so you can add or remove features. No flag needed.
 
 ```text
-ccpkg install                # feature picker (when run in a terminal)
+ccpkg install                # interactive picker (pre-filled on a re-run)
 ccpkg install --yes          # headless: apply saved profile or defaults, no prompts
-ccpkg install --reconfigure  # re-open the picker even if a profile exists
+ccpkg uninstall              # remove managed files, restore backups, drop mailbox + profile
 ```
 
 `--yes` (alias `--non-interactive`) is fully headless — it applies the saved profile, or the
 defaults if none exists, with no prompts. `install.sh` uses it so the bootstrap never blocks.
+`ccpkg uninstall` asks to confirm first (or pass `--yes`); it never deletes `settings.json`
+outright — it restores the pre-install backup, or leaves the file for manual review.
 
 ## How it works
 
@@ -126,10 +131,12 @@ dependencies):
 
 | Command | What it does |
 | --- | --- |
-| `install` | Fresh-machine bootstrap (idempotent): deps, base, overlay, plugins, mailbox, scan, re-auth notes. |
+| `install` | Bootstrap / update (idempotent): deps, base, overlay, plugins, mailbox, scan, re-auth notes. Interactive runs open the picker (pre-filled on a re-run); `--yes` is headless. |
 | `pull` | Re-apply repo to live `~/.claude` (symlink/template/merge; backs up first). |
 | `push [paths...]` | Capture changed live files into the right layer; reverse-templatize machine values; secret-scan. No auto-commit. Requires a git checkout. |
-| `status` / `doctor` | Report drift between the repo and live, plus a health note. |
+| `uninstall` | Remove managed files from `~/.claude` (restoring `*.ccpkg.bak` backups), drop the mailbox runtime + saved profile. Confirms first; `--yes` to skip. Never deletes `settings.json` outright. |
+| `status` | Per-file drift between the repo and live `~/.claude`. |
+| `doctor` | Environment health report: deps, profile, mailbox state, and a drift summary. |
 | `scan` | Secrets + base-purity scan; exits non-zero on findings. Also the pre-commit hook. |
 
 ## Repository layout

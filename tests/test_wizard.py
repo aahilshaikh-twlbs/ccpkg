@@ -122,10 +122,18 @@ def test_render_intro_raw_plain_has_wordmark_and_footer():
     wizard._render_intro_raw(st, out)
     text = out.getvalue()
     assert "\x1b[36m" not in text and "\x1b[1m" not in text   # no SGR styling
-    assert "c c p k g" in text
+    assert wizard._WORDMARK_ART[0] in text                     # block wordmark
     assert "environment-as-code" in text
-    assert "2 stages" in text                                  # orientation line
+    assert "2 groups" in text                                  # status line
+    assert "fresh install" in text                             # not a re-run
     assert "begin" in text and "cancel" in text                # footer
+
+
+def test_render_intro_raw_existing_install_status():
+    st = wizard.WizardState(_stages(), set(), existing=True)
+    out = io.StringIO()
+    wizard._render_intro_raw(st, out)
+    assert "existing install" in out.getvalue()
 
 
 def test_initial_preselected_are_ticked():
@@ -321,7 +329,7 @@ def test_raw_mode_loop_intro_enter_then_applies():
         os.close(slave)
         os.close(master)
     assert "settings.json" in result
-    assert "c c p k g" in out.getvalue()        # intro splash was rendered
+    assert wizard._WORDMARK_ART[0] in out.getvalue()  # intro splash was rendered
 
 
 def test_raw_mode_loop_esc_on_intro_cancels():
@@ -341,6 +349,27 @@ def test_raw_mode_loop_esc_on_intro_cancels():
     finally:
         os.close(slave)
         os.close(master)
+
+
+def test_raw_mode_loop_left_on_intro_does_not_cancel():
+    # Regression: a left arrow on the intro must NOT cancel (it used to be
+    # aliased to esc). Here: left (ignored) then right begins, then 4 enters
+    # walk to apply — the run completes with a selection rather than aborting.
+    import pty
+    master, slave = pty.openpty()
+    out = io.StringIO()
+    _feed_after_raw(master, b"\x1b[D" + b"\x1b[C" + b"\r\r\r")  # left, right=begin, walk
+    stream = _PipeKeyStream(slave)
+
+    def _run():
+        return wizard._raw_mode_loop(_stages(), {"settings.json"}, stream, out)
+
+    try:
+        result = _with_timeout(3.0, _run)
+    finally:
+        os.close(slave)
+        os.close(master)
+    assert "settings.json" in result            # completed, not cancelled
 
 
 def test_run_wizard_empty_stages_returns_preselected():

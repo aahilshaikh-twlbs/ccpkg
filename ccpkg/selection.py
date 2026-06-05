@@ -66,17 +66,18 @@ def default_ids(items, sels, overlay_present):
 def resolve_selection(items, sels, overlay_present, profile_obj, is_tty,
                       reconfigure, run_wizard):
     # type: (List, List, bool, object, bool, bool, Optional[Callable]) -> Set[str]
-    """Precedence ladder -> the set of selected ids. Four branches, in order:
+    """Precedence ladder -> the set of selected ids. Three branches, in order:
 
-    1. --reconfigure on a TTY (with a wizard): run the wizard, pre-ticked from
-       the profile MERGED with current defaults when a profile exists, else from
-       defaults. (--yes sets is_tty False, so it skips this and replays headless.)
-    2. profile present: replay it — the saved `selected`, UNION any default-on
-       feature the profile never recorded (`defaults` minus the explicitly
-       `deselected`). This keeps newly-added default-on features from being
-       silently suppressed by an older profile.
-    3. TTY (with a wizard) and no profile: run the wizard, pre-ticked from defaults.
-    4. else (headless first run): the default:true entries.
+    1. Interactive (a TTY with a wizard): ALWAYS open the picker, pre-ticked from
+       the saved profile MERGED with current defaults when a profile exists, else
+       from defaults. Re-running `ccpkg install` is therefore how you update your
+       selection — no flag needed. (`reconfigure` is implied by interactivity and
+       kept only for back-compat; `--yes` sets is_tty False so it skips this.)
+    2. profile present (headless, e.g. --yes): replay it — the saved `selected`,
+       UNION any default-on feature the profile never recorded (`defaults` minus
+       the explicitly `deselected`). Keeps newly-added default-on features from
+       being silently suppressed by an older profile.
+    3. else (headless first run): the default:true entries.
     """
     defaults = default_ids(items, sels, overlay_present)
     stages = build_stages(items, sels, overlay_present)
@@ -85,17 +86,12 @@ def resolve_selection(items, sels, overlay_present, profile_obj, is_tty,
         # type: (object) -> Set[str]
         return set(prof.selected) | (defaults - set(prof.deselected))
 
-    if reconfigure and is_tty and run_wizard is not None:
-        if profile_obj is not None:
-            preselected = _replay(profile_obj)
-        else:
-            preselected = set(defaults)
+    if is_tty and run_wizard is not None:
+        preselected = _replay(profile_obj) if profile_obj is not None \
+            else set(defaults)
         return set(run_wizard(stages, preselected))
 
     if profile_obj is not None:
         return _replay(profile_obj)
-
-    if is_tty and run_wizard is not None:
-        return set(run_wizard(stages, set(defaults)))
 
     return set(defaults)

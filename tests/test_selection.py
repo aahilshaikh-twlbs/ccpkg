@@ -117,6 +117,27 @@ def test_resolve_runs_wizard_when_tty_and_no_profile():
     assert "superpowers" in calls["preselected"]
 
 
+def test_resolve_interactive_with_profile_reopens_picker_prefilled():
+    # The update flow: a TTY run WITH a saved profile and NO --reconfigure now
+    # reopens the picker (pre-ticked from the profile merged with defaults),
+    # instead of silently replaying. This is how a re-run becomes an update.
+    prof = profile.Profile(selected=["settings.json"], deselected=["skills/shannon"])
+    calls = {}
+
+    def fake_wizard(stages, preselected):
+        calls["preselected"] = set(preselected)
+        return {"settings.json", "skills/shannon"}
+
+    ids = selection.resolve_selection(
+        _items(), selectables.SELECTABLES, overlay_present=False,
+        profile_obj=prof, is_tty=True, reconfigure=False, run_wizard=fake_wizard)
+    assert "preselected" in calls                       # wizard DID run
+    assert "settings.json" in calls["preselected"]      # from profile.selected
+    assert "skills/shannon" not in calls["preselected"] # explicitly deselected
+    assert "superpowers" in calls["preselected"]        # new default-on merged in
+    assert ids == {"settings.json", "skills/shannon"}
+
+
 def test_resolve_reconfigure_runs_wizard_even_with_profile():
     prof = profile.Profile(selected=["settings.json"], deselected=[])
 

@@ -121,7 +121,8 @@ def _cmd_install(root, home, env, os_name, yes=False, reconfigure=False):
     is_tty = (not yes) and _stdin_is_tty()
 
     def _run_wizard(stages, preselected):
-        return wizard.run_wizard(stages, preselected)
+        # `existing` drives the splash status line (re-run vs fresh install).
+        return wizard.run_wizard(stages, preselected, existing=prof is not None)
 
     try:
         selected = selection.resolve_selection(
@@ -134,11 +135,11 @@ def _cmd_install(root, home, env, os_name, yes=False, reconfigure=False):
         print("install cancelled")
         return 130
 
-    # The WIZARD owns the profile: persist ONLY when it actually ran — a TTY
-    # session that was reconfigured or had no prior profile. A headless defaults
-    # run (--yes) or a plain profile replay must NOT (re)write it, otherwise a
-    # later interactive run would silently replay instead of opening the picker.
-    if is_tty and (reconfigure or prof is None):
+    # The WIZARD owns the profile: persist whenever it actually ran, i.e. any
+    # interactive (TTY) session — re-runs now always reopen the picker, so the
+    # (possibly updated) selection is what we save. A headless run (--yes) or a
+    # plain profile replay must NOT (re)write it.
+    if is_tty:
         all_ids = selection.default_ids(
             items, selectables.SELECTABLES, overlay_present) | set(selected)
         deselected = sorted(all_ids - set(selected))
@@ -206,10 +207,80 @@ def _cmd_scan(root, home, env, os_name):
 
 
 def _cmd_status(root, home, env, os_name):
+    # status = per-file drift between the repo and the live ~/.claude.
     drift = _compute_drift(root, home, os_name)
     for path_rel, status in drift:
         print("{0}\t{1}".format(path_rel, status))
+    print("note: run `ccpkg doctor` for an environment health report.")
+    return 0
+
+
+def _cmd_doctor(root, home, env, os_name):
+    # doctor = environment health: deps, profile, mailbox, and a drift SUMMARY
+    # (distinct from `status`, which lists per-file drift).
+    from collections import Counter
+    from . import profile
+
+    print("ccpkg doctor")
+    print("os\t{0}".format(os_name))
+    for dep in ("git", "python3", "jq"):
+        print("dep {0}\t{1}".format(dep, "present" if osenv.have(dep) else "MISSING"))
+
+    prof = profile.load(home)
+    if prof is None:
+        print("profile\tnone (run `ccpkg install`)")
+    else:
+        print("profile\t{0} selected".format(len(prof.selected)))
+
+    sock = os.path.join(home, "mailbox", "mailboxd.sock")
+    mb_dir = os.path.join(home, "mailbox")
+    if os.path.exists(sock):
+        mb = "running"
+    elif os.path.isdir(mb_dir):
+        mb = "installed (daemon stopped)"
+    else:
+        mb = "absent"
+    print("mailbox\t{0}".format(mb))
+
+    counts = Counter(status for _p, status in _compute_drift(root, home, os_name))
+    print("drift\t{0} ok · {1} drift · {2} missing".format(
+        counts.get("ok", 0), counts.get("drift", 0), counts.get("missing", 0)))
+    if counts.get("drift", 0) or counts.get("missing", 0):
+        print("note: run `ccpkg status` for per-file detail, then `ccpkg pull` "
+              "to re-apply.")
     print("note: run `claude doctor` for a Claude Code health report.")
+    return 0
+
+
+def _cmd_uninstall(root, home, env, os_name, yes=False):
+    from . import uninstall as _uninstall
+
+    targets = _uninstall.plan(root, home, os_name)
+    if not yes:
+        # Destructive + irreversible-ish. Without --yes we ONLY proceed after an
+        # explicit interactive 'yes'. Non-interactive (piped/CI) without --yes
+        # must REFUSE rather than run silently.
+        if not _stdin_is_tty():
+            print("ccpkg uninstall: refusing to run non-interactively without "
+                  "--yes (this removes managed files from {0}). Re-run with "
+                  "--yes to confirm.".format(home), file=sys.stderr)
+            return 2
+        print("ccpkg uninstall will remove these managed files from {0}:".format(home))
+        for t in targets:
+            print("  {0}".format(t))
+        print("  …plus the mailbox runtime and the saved profile. "
+              "*.ccpkg.bak backups are restored where present; settings.json is "
+              "never deleted (backup restored, or left for manual review).")
+        try:
+            resp = input("Proceed? [y/N] ").strip().lower()
+        except EOFError:
+            resp = ""
+        if resp not in ("y", "yes"):
+            print("uninstall cancelled")
+            return 130
+    results = _uninstall.uninstall(root, home, os_name)
+    for label, status in results:
+        print("{0}\t{1}".format(label, status))
     return 0
 
 
@@ -232,6 +303,10 @@ def _build_parser():
     sub.add_parser("status")
     sub.add_parser("doctor")
     sub.add_parser("scan")
+    p_uninstall = sub.add_parser("uninstall")
+    p_uninstall.add_argument("--yes", "--non-interactive", dest="yes",
+                             action="store_true",
+                             help="skip the confirmation prompt")
     return parser
 
 
@@ -252,7 +327,12 @@ def main(argv=None):
         return _cmd_push(root, home, env, os_name, args.paths)
     if args.cmd == "scan":
         return _cmd_scan(root, home, env, os_name)
-    if args.cmd == "status" or args.cmd == "doctor":
+    if args.cmd == "status":
         return _cmd_status(root, home, env, os_name)
+    if args.cmd == "doctor":
+        return _cmd_doctor(root, home, env, os_name)
+    if args.cmd == "uninstall":
+        return _cmd_uninstall(root, home, env, os_name,
+                              yes=getattr(args, "yes", False))
     parser.print_help()
     return 2

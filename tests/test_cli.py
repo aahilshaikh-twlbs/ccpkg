@@ -207,7 +207,9 @@ def test_main_status_prints_drift(tmp_repo, tmp_home, monkeypatch, capsys):
     assert "missing" in out
 
 
-def test_main_doctor_prints_drift(tmp_repo, tmp_home, monkeypatch, capsys):
+def test_main_doctor_prints_health_report(tmp_repo, tmp_home, monkeypatch, capsys):
+    # doctor is a health report (os/deps/profile/mailbox/drift SUMMARY), distinct
+    # from status's per-file listing.
     _seed_localenv(tmp_repo, tmp_home)
     _patch_resolution(monkeypatch, tmp_repo, tmp_home)
     with open(os.path.join(tmp_repo, "home", ".claude", "settings.json"), "w") as fh:
@@ -217,7 +219,71 @@ def test_main_doctor_prints_drift(tmp_repo, tmp_home, monkeypatch, capsys):
 
     assert rc == 0
     out = capsys.readouterr().out
-    assert "settings.json" in out
+    assert "ccpkg doctor" in out
+    assert "os\t" in out
+    assert "dep git\t" in out
+    assert "profile\t" in out
+    assert "mailbox\t" in out
+    assert "drift\t" in out                    # summary line, not per-file
+
+
+def test_status_and_doctor_differ(tmp_repo, tmp_home, monkeypatch, capsys):
+    # Regression: status and doctor must NOT print identical output (they used to
+    # be the same function).
+    _seed_localenv(tmp_repo, tmp_home)
+    _patch_resolution(monkeypatch, tmp_repo, tmp_home)
+    cli.main(["status"])
+    status_out = capsys.readouterr().out
+    cli.main(["doctor"])
+    doctor_out = capsys.readouterr().out
+    assert status_out != doctor_out
+    # a doctor-only marker that status never prints
+    assert "dep git\t" in doctor_out and "dep git\t" not in status_out
+
+
+def test_main_uninstall_yes_removes_profile_and_mailbox(tmp_repo, tmp_home,
+                                                        monkeypatch, capsys):
+    from ccpkg import profile
+    _seed_localenv(tmp_repo, tmp_home)
+    _patch_resolution(monkeypatch, tmp_repo, tmp_home)
+    # Fake an installed tree in the live home.
+    profile.save(tmp_home, profile.Profile(selected=["statusline.sh"], deselected=[]))
+    os.makedirs(os.path.join(tmp_home, "mailbox"))
+    with open(os.path.join(tmp_home, "statusline.sh"), "w") as fh:
+        fh.write("live")
+
+    rc = cli.main(["uninstall", "--yes"])     # --yes skips the confirm prompt
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "mailbox\tremoved" in out
+    assert profile.load(tmp_home) is None
+    assert not os.path.isdir(os.path.join(tmp_home, "mailbox"))
+
+
+def test_main_uninstall_refuses_without_yes_when_not_tty(tmp_repo, tmp_home,
+                                                         monkeypatch, capsys):
+    # Regression: piped/non-interactive uninstall WITHOUT --yes must refuse and
+    # remove NOTHING (it previously skipped the prompt and ran destructively).
+    from ccpkg import profile
+    _seed_localenv(tmp_repo, tmp_home)
+    _patch_resolution(monkeypatch, tmp_repo, tmp_home)
+    monkeypatch.setattr(cli, "_stdin_is_tty", lambda: False)   # non-interactive
+    profile.save(tmp_home, profile.Profile(selected=["statusline.sh"], deselected=[]))
+    os.makedirs(os.path.join(tmp_home, "mailbox"))
+
+    rc = cli.main(["uninstall"])               # no --yes, no TTY
+
+    assert rc == 2                              # refused
+    assert profile.load(tmp_home) is not None   # nothing removed
+    assert os.path.isdir(os.path.join(tmp_home, "mailbox"))
+    assert "refusing" in capsys.readouterr().err.lower()
+
+
+def test_uninstall_parser_accepts_yes():
+    parser = cli._build_parser()
+    args = parser.parse_args(["uninstall", "--yes"])
+    assert args.yes is True
 
 
 def test_main_unknown_subcommand_nonzero(tmp_repo, tmp_home, monkeypatch, capsys):
@@ -277,7 +343,8 @@ def test_install_wizard_path_writes_profile(tmp_repo, tmp_home, monkeypatch):
     monkeypatch.setattr(cli.config, "repo_root", lambda: tmp_repo)
     monkeypatch.setattr(cli.config, "home_target", lambda: tmp_home)
     monkeypatch.setattr(cli, "_stdin_is_tty", lambda: True)
-    monkeypatch.setattr(wizard, "run_wizard", lambda stages, pre: {"settings.json"})
+    monkeypatch.setattr(wizard, "run_wizard",
+                        lambda stages, pre, existing=False: {"settings.json"})
     monkeypatch.setattr(installer, "install", _stub_install)
 
     rc = cli.main(["install"])           # interactive TTY path, no prior profile
@@ -294,7 +361,8 @@ def test_install_reconfigure_writes_profile(tmp_repo, tmp_home, monkeypatch):
     profile.save(tmp_home, profile.Profile(selected=["settings.json"], deselected=[]))
     monkeypatch.setattr(cli, "_stdin_is_tty", lambda: True)
     monkeypatch.setattr(wizard, "run_wizard",
-                        lambda stages, pre: {"settings.json", "statusline.sh"})
+                        lambda stages, pre, existing=False:
+                        {"settings.json", "statusline.sh"})
     monkeypatch.setattr(installer, "install", _stub_install)
 
     rc = cli.main(["install", "--reconfigure"])
@@ -303,22 +371,48 @@ def test_install_reconfigure_writes_profile(tmp_repo, tmp_home, monkeypatch):
     assert set(prof.selected) == {"settings.json", "statusline.sh"}
 
 
-def test_install_replay_does_not_rewrite_profile(tmp_repo, tmp_home, monkeypatch):
+def test_install_yes_replay_does_not_rewrite_profile(tmp_repo, tmp_home, monkeypatch):
+    # Headless replay (--yes with a saved profile) applies the profile and must
+    # NOT rewrite it — the wizard never ran.
     from ccpkg import cli, profile
     monkeypatch.setattr(cli.config, "repo_root", lambda: tmp_repo)
     monkeypatch.setattr(cli.config, "home_target", lambda: tmp_home)
     profile.save(tmp_home, profile.Profile(selected=["settings.json"],
                                            deselected=["statusline.sh"]))
     monkeypatch.setattr(installer, "install", _stub_install)
-    monkeypatch.setattr(cli, "_stdin_is_tty", lambda: True)
 
     saved = {"called": False}
     monkeypatch.setattr(profile, "save",
                         lambda *a, **k: saved.__setitem__("called", True))
 
-    rc = cli.main(["install"])           # profile present, not reconfigure -> replay
+    rc = cli.main(["install", "--yes"])  # headless replay
     assert rc == 0
-    assert saved["called"] is False      # replay must NOT rewrite the profile
+    assert saved["called"] is False      # headless replay must NOT rewrite
+
+
+def test_install_rerun_reopens_picker_and_rewrites(tmp_repo, tmp_home, monkeypatch):
+    # The update flow: an interactive re-run WITH a saved profile reopens the
+    # picker (pre-filled) and persists the (possibly changed) selection.
+    from ccpkg import cli, profile, wizard
+    monkeypatch.setattr(cli.config, "repo_root", lambda: tmp_repo)
+    monkeypatch.setattr(cli.config, "home_target", lambda: tmp_home)
+    profile.save(tmp_home, profile.Profile(selected=["settings.json"], deselected=[]))
+    monkeypatch.setattr(cli, "_stdin_is_tty", lambda: True)
+    monkeypatch.setattr(installer, "install", _stub_install)
+
+    seen = {}
+
+    def fake_wizard(stages, pre, existing=False):
+        seen["existing"] = existing
+        return {"settings.json", "statusline.sh"}  # user toggled one on
+
+    monkeypatch.setattr(wizard, "run_wizard", fake_wizard)
+
+    rc = cli.main(["install"])           # no --reconfigure; picker still reopens
+    assert rc == 0
+    assert seen["existing"] is True      # splash knows it's a re-run
+    prof = profile.load(tmp_home)
+    assert set(prof.selected) == {"settings.json", "statusline.sh"}
 
 
 def test_install_ctrl_c_during_wizard_cancels(tmp_repo, tmp_home, monkeypatch, capsys):
@@ -327,7 +421,7 @@ def test_install_ctrl_c_during_wizard_cancels(tmp_repo, tmp_home, monkeypatch, c
     monkeypatch.setattr(cli.config, "home_target", lambda: tmp_home)
     monkeypatch.setattr(cli, "_stdin_is_tty", lambda: True)
 
-    def _boom(stages, pre):
+    def _boom(stages, pre, existing=False):
         raise KeyboardInterrupt
 
     monkeypatch.setattr(wizard, "run_wizard", _boom)
