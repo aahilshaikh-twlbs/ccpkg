@@ -81,15 +81,26 @@ def test_select_all_and_none_affect_current_stage_only():
     assert st.is_selected("settings.json")
 
 
-def test_stage_navigation_and_done():
+def test_stage_navigation_and_review():
     st = wizard.WizardState(_stages(), set())
     assert st.stage_index == 0
     st.next_stage()
     assert st.stage_index == 1
     assert not st.is_done()
-    st.next_stage()                   # past last stage -> done
+    st.next_stage()                   # past last stage -> review (NOT done yet)
+    assert st.is_review()
+    assert not st.is_done()
+    st.confirm()                      # Enter on review -> apply
     assert st.is_done()
-    st.prev_stage()                   # back off the done state
+
+
+def test_back_from_review_returns_to_last_stage():
+    st = wizard.WizardState(_stages(), set())
+    st.next_stage()                   # stage 2 (index 1, the last)
+    st.next_stage()                   # review
+    assert st.is_review()
+    st.prev_stage()                   # Esc/Left on review -> back
+    assert not st.is_review()
     assert not st.is_done()
     assert st.stage_index == 1
 
@@ -213,3 +224,44 @@ def test_run_wizard_falls_back_when_raw_mode_crashes(monkeypatch):
     result = wizard.run_wizard(_stages(), {"settings.json"},
                                in_stream=instream, out_stream=outstream)
     assert "settings.json" in result
+
+
+def test_soft_warning_present_when_settings_deselected():
+    warn = wizard._soft_warning(wizard.WizardState(_stages(), set()))
+    assert warn is not None
+    assert "settings.json" in warn
+
+
+def test_soft_warning_absent_when_settings_selected():
+    warn = wizard._soft_warning(wizard.WizardState(_stages(), {"settings.json"}))
+    assert warn is None
+
+
+def test_numbered_fallback_drives_through_review():
+    # stage1 Enter -> stage2 Enter -> review Enter applies. The review step is
+    # one EXTRA Enter compared with the pre-review flow.
+    stages = _stages()
+    instream = io.StringIO("\n\n\n")
+    result = wizard._numbered_fallback(stages, {"settings.json"},
+                                       instream, io.StringIO())
+    assert "settings.json" in result
+
+
+def test_numbered_fallback_review_back_then_apply():
+    # review 'b' goes back to the last stage; a later Enter re-enters review and
+    # applies.
+    stages = _stages()
+    instream = io.StringIO("\n\nb\n\n\n")
+    result = wizard._numbered_fallback(stages, {"settings.json"},
+                                       instream, io.StringIO())
+    assert "settings.json" in result
+
+
+def test_numbered_fallback_review_shows_soft_warning():
+    # With settings.json deselected, the review screen carries the soft warning.
+    stages = _stages()
+    instream = io.StringIO("\n\n\n")
+    outstream = io.StringIO()
+    wizard._numbered_fallback(stages, set(), instream, outstream)
+    assert "settings.json" in outstream.getvalue()
+    assert "incomplete" in outstream.getvalue()
