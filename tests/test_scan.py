@@ -199,8 +199,8 @@ def test_repo_shippable_files_excludes_vcs_venv_private_ccpkg(tmp_path):
         fh.write("doc\n")
     with open(os.path.join(root, "ccpkg", "scan.py"), "w") as fh:
         fh.write("code\n")
-    # excluded dirs
-    for excluded in (".git", ".venv", ".pytest_cache", "__pycache__", "private", ".ccpkg"):
+    # excluded dirs (handoffs/ is gitignored local-only session docs — must not be scanned)
+    for excluded in (".git", ".venv", ".pytest_cache", "__pycache__", "private", ".ccpkg", "handoffs"):
         os.makedirs(os.path.join(root, excluded))
         with open(os.path.join(root, excluded, "ignored.txt"), "w") as fh:
             fh.write("nope\n")
