@@ -154,3 +154,27 @@ See [`docs/overlay-example/`](docs/overlay-example/) for the exact overlay layou
 own `manifest.json` with `layer="overlay"` items + a `home/.claude/` mirror) and the
 local migration steps. Migrating real personal content into the overlay is a LOCAL action
 and is never committed to this base repo.
+
+## Running from a package (`CCPKG_ROOT`)
+
+ccpkg also runs from a read-only, git-less install (a Homebrew or apt package; those
+distribution channels are separate, later work). A packaged install sets:
+
+| Variable | Meaning |
+|----------|---------|
+| `CCPKG_ROOT` | absolute path to the bundled asset tree (`manifest.json`, `home/.claude/`, `mailbox/`). When set, ccpkg reads its assets from here instead of the git checkout. |
+| `CCPKG_LOCAL_ENV` | optional explicit path to `local.env`. |
+
+When `CCPKG_ROOT` is set, ccpkg:
+
+- reads `local.env` from `$CCPKG_LOCAL_ENV` → `~/.config/ccpkg/local.env`
+  (honoring `$XDG_CONFIG_HOME`) → `<root>/local.env`, using the first that exists;
+- **skips runtime dependency installation** (`git`/`python3`/`jq` are declared package
+  dependencies, not installed on the fly); and
+- disables `ccpkg push` (capturing live edits back into the repo needs a git checkout —
+  it exits non-zero with a message pointing you at a clone for the dev workflow).
+
+A plain git checkout running `python3 -m ccpkg` is unaffected: with `CCPKG_ROOT` unset,
+assets resolve relative to the checkout and `local.env` falls back to `<repo>/local.env`,
+exactly as before. `make dist` builds the versioned tarball (`ccpkg --version`) that the
+package definitions consume.
