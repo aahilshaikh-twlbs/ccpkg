@@ -111,7 +111,6 @@ def _print_results(results):
 
 def _cmd_install(root, home, env, os_name, yes=False, reconfigure=False):
     from . import manifest, selectables, selection, profile, wizard
-    import sys
 
     items = manifest.parse(config.manifest_path(root))
     overlay_present = bool(
@@ -123,18 +122,27 @@ def _cmd_install(root, home, env, os_name, yes=False, reconfigure=False):
     def _run_wizard(stages, preselected):
         return wizard.run_wizard(stages, preselected)
 
-    selected = selection.resolve_selection(
-        items, selectables.SELECTABLES, overlay_present,
-        profile_obj=prof, is_tty=is_tty, reconfigure=reconfigure,
-        run_wizard=_run_wizard,
-    )
+    try:
+        selected = selection.resolve_selection(
+            items, selectables.SELECTABLES, overlay_present,
+            profile_obj=prof, is_tty=is_tty, reconfigure=reconfigure,
+            run_wizard=_run_wizard,
+        )
+    except KeyboardInterrupt:
+        # Clean cancel from the wizard: nothing applied, nothing persisted.
+        print("install cancelled")
+        return 130
 
-    # Persist the resolved selection (split into selected/deselected for clarity).
-    all_ids = selection.default_ids(items, selectables.SELECTABLES, overlay_present) \
-        | set(selected)
-    deselected = sorted(all_ids - set(selected))
-    profile.save(home, profile.Profile(selected=sorted(selected),
-                                        deselected=deselected))
+    # The WIZARD owns the profile: persist ONLY when it actually ran — a TTY
+    # session that was reconfigured or had no prior profile. A headless defaults
+    # run (--yes) or a plain profile replay must NOT (re)write it, otherwise a
+    # later interactive run would silently replay instead of opening the picker.
+    if is_tty and (reconfigure or prof is None):
+        all_ids = selection.default_ids(
+            items, selectables.SELECTABLES, overlay_present) | set(selected)
+        deselected = sorted(all_ids - set(selected))
+        profile.save(home, profile.Profile(selected=sorted(selected),
+                                            deselected=deselected))
 
     report = installer.install(root, home, env, os_name, selected=set(selected))
     print("os: {0}".format(report.os))
@@ -153,7 +161,6 @@ def _cmd_install(root, home, env, os_name, yes=False, reconfigure=False):
 
 
 def _stdin_is_tty():
-    import sys
     try:
         return bool(sys.stdin.isatty())
     except Exception:
