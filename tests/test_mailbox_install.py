@@ -15,6 +15,7 @@ HOOK_SCRIPTS = {
     "SessionStart": (None, "session_start.py"),
     "PreToolUse": ("Edit|Write|MultiEdit|NotebookEdit", "pre_tool_use.py"),
     "SessionEnd": (None, "session_end.py"),
+    "Stop": (None, "stop.py"),
 }
 
 
@@ -96,7 +97,7 @@ def test_install_fallback_creates_symlinks_and_merges_hooks(tmp_home, tmp_path):
         os.path.join(mb, "hooks")
     )
 
-    # settings.json now carries all 5 hooks, $HOME-relative
+    # settings.json now carries all 6 hooks, $HOME-relative
     settings = json.load(open(os.path.join(tmp_home, "settings.json")))
     hooks = settings["hooks"]
     seen = {}

@@ -14,7 +14,7 @@ from typing import Dict, Optional
 from . import config
 from . import mergejson
 
-# The 5 mailbox hooks, in (event, matcher, hook-script-basename) form.
+# The 6 mailbox hooks, in (event, matcher, hook-script-basename) form.
 # matcher == None means the hook group carries no "matcher" key.
 HOOKS = [
     ("UserPromptSubmit", None, "user_prompt_submit.py"),
@@ -22,6 +22,7 @@ HOOKS = [
     ("SessionStart", None, "session_start.py"),
     ("PreToolUse", "Edit|Write|MultiEdit|NotebookEdit", "pre_tool_use.py"),
     ("SessionEnd", None, "session_end.py"),
+    ("Stop", None, "stop.py"),
 ]
 
 _VENDORED_MODULE_NAME = "ccpkg_vendored_mailbox_install"
