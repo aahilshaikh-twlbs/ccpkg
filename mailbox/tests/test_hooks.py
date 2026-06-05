@@ -364,3 +364,33 @@ def test_session_end_hook_releases_claims(tmp_home):
     )
     assert mine_after["ok"] is True
     assert mine_after["data"] == []
+
+
+def test_stop_hook_releases_auto_keeps_presence(tmp_home):
+    from mailbox import client
+
+    sid = "sess-stop-1"
+    cwd = REPO_ROOT
+    client.ensure_running()
+    assert client.request("join", {"session_id": sid, "label": "stopper", "cwd": cwd})["ok"]
+
+    target = os.path.join(cwd, "src", "mailbox", "engine.py")
+    assert client.request("check_write", {"session_id": sid, "abs_path": target})["data"]["decision"] == "allow"
+
+    # Precondition: one live auto claim, session active.
+    mine_before = client.request("list_claims", {"session_id": sid, "scope": "mine"})
+    assert len(mine_before["data"]) == 1
+
+    result = _run_hook("stop.py", {"session_id": sid, "cwd": cwd, "hook_event_name": "Stop"})
+    assert result.returncode == 0
+
+    # Auto claim released (list_claims omits released claims) but presence stays active.
+    mine_after = client.request("list_claims", {"session_id": sid, "scope": "mine"})
+    assert mine_after["data"] == []
+    who = client.request("whoami", {"session_id": sid})
+    assert who["data"]["status"] == "active"
+
+
+def test_stop_hook_fail_open_on_empty_stdin(tmp_home):
+    result = _run_hook("stop.py", None)
+    assert result.returncode == 0
