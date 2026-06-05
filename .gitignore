@@ -30,3 +30,5 @@ dist/
 private/
 # session handoff docs (contain local paths / personal context — never commit)
 handoffs/
+# internal design docs (plans/specs — live in the private overlay, never commit; see docs/README.md)
+docs/superpowers/

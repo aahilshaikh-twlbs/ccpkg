@@ -17,7 +17,13 @@ SECRET_FILES = [".credentials.json", ".claude.json"]
 # loaded at runtime by load_purity_terms().
 DEFAULT_PURITY_TERMS = []  # type: List[str]
 
-_HOME_PATH_PATTERNS = [r"/Users/[^/\s]+", r"/home/[^/\s]+"]
+# The first path segment must start like a real username (alnum/underscore).
+# This anchoring still catches genuine leaks (a literal macOS/Linux user-home
+# path) while NOT matching the detector's own meta-strings (a bracket follows
+# the prefix) or dotted non-home references (a dot follows the prefix, e.g. a
+# docstring) — both legitimate now that the home-path rule covers every base
+# file, not just home/.claude.
+_HOME_PATH_PATTERNS = [r"/Users/[A-Za-z0-9_][^/\s]*", r"/home/[A-Za-z0-9_][^/\s]*"]
 
 _SECRET_RES = [re.compile(p, re.IGNORECASE) for p in SECRET_PATTERNS]
 _HOME_PATH_RES = [re.compile(p) for p in _HOME_PATH_PATTERNS]
@@ -138,10 +144,11 @@ def scan_repo(root, terms):
         legitimately carry synthetic secret-shaped and home-path fixtures that
         exist to exercise the detectors; they must still be free of real
         company/person terms.
-      - everything else: secrets + purity terms (no home-path regex, so fictional
-        example paths in docs/configs do not false-positive).
+      - everything else (base source-of-truth AND docs/configs/root files):
+        secrets + purity terms + the un-templated home-path regex. No shippable
+        base file should ever carry a literal /Users//home path — portable paths
+        must be templated ($HOME-relative).
     """
-    base_src = os.path.join(root, "home", ".claude")
     tests_dir = os.path.join(root, "tests")
     findings = []  # type: List[Finding]
     for path in repo_shippable_files(root):
@@ -155,9 +162,8 @@ def scan_repo(root, terms):
                 scan_text_purity(text, terms, path, check_home_paths=False)
             )
             continue
-        check_home_paths = _is_under(path, base_src)
         findings.extend(
-            scan_paths([path], "base", terms, check_home_paths=check_home_paths)
+            scan_paths([path], "base", terms, check_home_paths=True)
         )
     return findings
 

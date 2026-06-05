@@ -26,6 +26,7 @@ class WizardState:
         self.cursor = 0
         self._done = False
         self._review = False
+        self._intro = True
 
     # --- queries -------------------------------------------------------
     def current_stage(self):
@@ -35,6 +36,10 @@ class WizardState:
     def is_selected(self, entry_id):
         # type: (str) -> bool
         return entry_id in self.selected
+
+    def is_intro(self):
+        # type: () -> bool
+        return self._intro
 
     def is_review(self):
         # type: () -> bool
@@ -49,6 +54,11 @@ class WizardState:
         return set(self.selected)
 
     # --- mutations -----------------------------------------------------
+    def begin(self):
+        # type: () -> None
+        # Leave the intro splash and land on the first stage.
+        self._intro = False
+
     def move(self, delta):
         # type: (int) -> None
         n = len(self.current_stage().entries)
@@ -104,6 +114,9 @@ class WizardState:
         if self.stage_index > 0:
             self.stage_index -= 1
             self.cursor = 0
+        else:
+            # Back from the first stage returns to the intro splash.
+            self._intro = True
 
 
 def _decode_key(seq):
@@ -123,12 +136,13 @@ _CLEAR = "\x1b[2J\x1b[H"
 _HIDE_CURSOR = "\x1b[?25l"
 _SHOW_CURSOR = "\x1b[?25h"
 
-# Glyphs (single display column each).
-_DOT_DONE = "●"   # ● completed/current stage
-_DOT_TODO = "○"   # ○ pending stage
-_BOX_SEL = "◉"    # ◉ selected entry
-_BOX_OFF = "○"    # ○ unselected entry
-_POINTER = "▸"    # ▸ cursor
+# Glyphs.
+_DOT_DONE = "●"      # ● completed/current stage
+_DOT_TODO = "○"      # ○ pending stage
+_CHECK_ON = "[✓]"    # selected entry — brackets read as 'toggleable'
+_CHECK_OFF = "[ ]"   # unselected entry
+_POINTER = "▸"       # ▸ cursor
+_WORDMARK = "c c p k g"
 
 
 class _Palette:
@@ -158,6 +172,9 @@ class _Palette:
     def sel(self, s):     # green
         return self._w("32", s)
 
+    def selbold(self, s):  # bold green
+        return self._w("1;32", s)
+
     def bold(self, s):
         return self._w("1", s)
 
@@ -182,6 +199,16 @@ def _term_width(out):
     except Exception:
         cols = 76
     return max(54, min(cols, 84))
+
+
+def _name_col_width(entries, gutter=4):
+    # type: (List, int) -> int
+    """Width of the entry-name column = widest id + a comfortable gutter, so
+    descriptions align in one clean column instead of crowding the longest id.
+    A fixed %-20s overflowed on ids like 'settings.local.json.tmpl' (24 chars)."""
+    if not entries:
+        return gutter
+    return max(len(e.id) for e in entries) + gutter
 
 
 def _emit_top(out, title, crumb, width, pal):
@@ -216,9 +243,10 @@ def _render_numbered(state, out):
     stage = state.current_stage()
     out.write("\nStage %d/%d - %s\n"
               % (state.stage_index + 1, len(state.stages), stage.name))
+    col = _name_col_width(stage.entries)
     for i, e in enumerate(stage.entries, 1):
         mark = "x" if state.is_selected(e.id) else " "
-        out.write("  %d. [%s] %-22s %s\n" % (i, mark, e.id, e.desc))
+        out.write("  %d. [%s] %-*s %s\n" % (i, mark, col, e.id, e.desc))
     out.write("Toggle # / 'a' all / 'n' none / Enter=continue: ")
     out.flush()
 
@@ -262,7 +290,7 @@ def _render_review_raw(state, out):
         chosen = [e for e in stage.entries if state.is_selected(e.id)]
         if chosen:
             for e in chosen:
-                out.write("    %s %s\r\n" % (pal.sel(_BOX_SEL), e.id))
+                out.write("    %s %s\r\n" % (pal.selbold(_CHECK_ON), e.id))
         else:
             out.write("    %s\r\n" % pal.dim("(none)"))
     warn = _soft_warning(state)
@@ -273,9 +301,22 @@ def _render_review_raw(state, out):
     out.flush()
 
 
+def _render_intro_numbered(state, out):
+    # type: (WizardState, object) -> None
+    n = len(state.stages)
+    out.write("\nccpkg — Claude Code environment-as-code\n")
+    out.write("%d stage%s to configure.\n" % (n, "" if n == 1 else "s"))
+    out.flush()
+
+
 def _numbered_fallback(stages, preselected, in_stream, out_stream):
     # type: (List[Stage], Set[str], object, object) -> Set[str]
     state = WizardState(stages, preselected)
+    # The intro is display-only in the headless renderer (no extra input): show
+    # the banner once, then drop straight into the first stage.
+    if state.is_intro():
+        _render_intro_numbered(state, out_stream)
+        state.begin()
     while not state.is_done():
         if state.is_review():
             _render_review_numbered(state, out_stream)
@@ -334,6 +375,25 @@ def _is_tty(stream):
         return False
 
 
+def _render_intro_raw(state, out):
+    # type: (WizardState, object) -> None
+    """Compact splash shown once before stage 0: wordmark, tagline, a one-line
+    orientation, and a begin/cancel footer."""
+    pal = _Palette(_color_enabled(out))
+    width = _term_width(out)
+    out.write(_CLEAR)
+    _emit_top(out, "ccpkg", "welcome", width, pal)
+    out.write("\r\n")
+    out.write("   %s  %s\r\n" % (pal.accent("▌"), pal.header(_WORDMARK)))
+    out.write("   %s\r\n\r\n" % pal.dim("Claude Code environment-as-code"))
+    n = len(state.stages)
+    orient = ("%d stage%s · ↑↓ move · space toggles · ⏎ continues"
+              % (n, "" if n == 1 else "s"))
+    out.write("   %s\r\n\r\n" % pal.dim(orient))
+    _emit_footer(out, "[ ⏎ begin ]", "[ esc cancel ]", width, pal)
+    out.flush()
+
+
 def _render_raw(state, out):
     # type: (WizardState, object) -> None
     pal = _Palette(_color_enabled(out))
@@ -345,14 +405,21 @@ def _render_raw(state, out):
                                     len(state.stages), stage.name),
               width, pal)
     out.write("\r\n")
+    # Per-stage header: makes each section read as a distinct step.
+    n_sel = sum(1 for e in stage.entries if state.is_selected(e.id))
+    n_all = len(stage.entries)
+    subtitle = "%d option%s · %d selected" % (n_all, "" if n_all == 1 else "s",
+                                              n_sel)
+    out.write("  %s   %s\r\n" % (_stage_dots(state, pal), pal.dim(subtitle)))
     hint = pal.dim("space toggle · ↑↓ move · ⏎ next · a all · n none · esc back")
-    out.write("  %s   %s\r\n\r\n" % (_stage_dots(state, pal), hint))
+    out.write("  %s\r\n\r\n" % hint)
+    col = _name_col_width(stage.entries)
     for i, e in enumerate(stage.entries):
         is_cur = (i == state.cursor)
         sel = state.is_selected(e.id)
         pointer = pal.cursor(_POINTER) if is_cur else " "
-        box = pal.sel(_BOX_SEL) if sel else pal.dim(_BOX_OFF)
-        name = "%-20s" % e.id
+        box = pal.selbold(_CHECK_ON) if sel else pal.dim(_CHECK_OFF)
+        name = "%-*s" % (col, e.id)
         name = pal.bold(name) if is_cur else name
         out.write(" %s %s %s %s\r\n" % (pointer, box, name, pal.dim(e.desc)))
     out.write("\r\n")
@@ -405,7 +472,9 @@ def _raw_mode_loop(stages, preselected, in_stream, out_stream):
     try:
         tty.setraw(fd)
         while not state.is_done():
-            if state.is_review():
+            if state.is_intro():
+                _render_intro_raw(state, out_stream)
+            elif state.is_review():
                 _render_review_raw(state, out_stream)
             else:
                 _render_raw(state, out_stream)
@@ -413,6 +482,14 @@ def _raw_mode_loop(stages, preselected, in_stream, out_stream):
             if key == "" or key == "ctrl-c":
                 # EOF or Ctrl-C: abort. The finally below restores the terminal.
                 raise KeyboardInterrupt
+            if state.is_intro():
+                if key == "enter":
+                    state.begin()
+                elif key in ("esc", "left"):
+                    # Esc on the splash cancels cleanly (terminal restored below).
+                    raise KeyboardInterrupt
+                # ignore every other key on the intro screen
+                continue
             if state.is_review():
                 if key == "enter":
                     state.confirm()

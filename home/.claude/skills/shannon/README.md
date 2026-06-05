@@ -6,15 +6,16 @@ Autonomous AI pentester as a Claude Code skill. Wraps [KeygraphHQ/Shannon](https
 
 ## Install
 
-```bash
-npx skills add unicodeveloper/shannon
-```
+This skill ships with the Claude Code environment and is deployed to
+`~/.claude/skills/shannon/` (see [Development](#development) to redeploy after local
+edits) — no separate registry install is required.
 
-Or install globally:
-
-```bash
-npx skills add unicodeveloper/shannon -g -y
-```
+The underlying Shannon framework is fetched automatically on first run: the skill clones
+it from the canonical source, [KeygraphHQ/shannon](https://github.com/KeygraphHQ/shannon),
+into `~/shannon` (override with the `SHANNON_HOME` env var). See **Step 0** in
+[SKILL.md](./SKILL.md) and [`scripts/setup-shannon.sh`](./scripts/setup-shannon.sh). You
+only need **Docker** and **AI-provider credentials** (see [Prerequisites](#prerequisites))
+in place before running `/shannon`.
 
 ## Quick Start
 

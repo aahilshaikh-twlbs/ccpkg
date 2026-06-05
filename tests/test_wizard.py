@@ -45,6 +45,89 @@ def _stages():
     ]
 
 
+def test_starts_in_intro_then_begin_lands_on_stage_zero():
+    st = wizard.WizardState(_stages(), set())
+    assert st.is_intro()
+    assert not st.is_review() and not st.is_done()
+    st.begin()
+    assert not st.is_intro()
+    assert st.stage_index == 0
+
+
+def test_prev_from_first_stage_returns_to_intro():
+    st = wizard.WizardState(_stages(), set())
+    st.begin()
+    assert not st.is_intro()
+    st.prev_stage()                   # Esc/Left on the first stage -> intro
+    assert st.is_intro()
+    assert st.stage_index == 0
+
+
+def test_prev_from_later_stage_does_not_return_to_intro():
+    st = wizard.WizardState(_stages(), set())
+    st.begin()
+    st.next_stage()                   # stage index 1
+    assert st.stage_index == 1
+    st.prev_stage()                   # back to stage 0, NOT the intro
+    assert not st.is_intro()
+    assert st.stage_index == 0
+
+
+def test_name_col_width_widest_id_plus_gutter():
+    entries = _stages()[0].entries     # ids: settings.json (13), statusline.sh (13)
+    assert wizard._name_col_width(entries) == 13 + 4
+    assert wizard._name_col_width(entries, gutter=2) == 13 + 2
+
+
+def test_name_col_width_tracks_longest_id():
+    long_stage = [Entry("settings.local.json.tmpl", "d", True, "file"),
+                  Entry("x", "d", True, "file")]
+    # 24-char id (the case the old fixed %-20s overflowed) drives the column.
+    assert wizard._name_col_width(long_stage) == 24 + 4
+
+
+def test_name_col_width_empty_entries_is_just_gutter():
+    assert wizard._name_col_width([]) == 4
+
+
+def test_render_raw_aligns_descriptions_for_long_ids(monkeypatch):
+    # Descriptions must start at the same column even when ids differ in length.
+    monkeypatch.setattr(wizard, "_color_enabled", lambda out: False)
+    stages = [Stage("Mixed", [
+        Entry("settings.local.json.tmpl", "DESC_A", True, "file"),
+        Entry("hooks.json", "DESC_B", True, "file")])]
+    st = wizard.WizardState(stages, set())
+    st.begin()
+    out = io.StringIO()
+    wizard._render_raw(st, out)
+    lines = [ln for ln in out.getvalue().split("\r\n") if "DESC_" in ln]
+    assert len(lines) == 2
+    assert lines[0].index("DESC_A") == lines[1].index("DESC_B")
+
+
+def test_render_raw_uses_bracketed_checkbox(monkeypatch):
+    monkeypatch.setattr(wizard, "_color_enabled", lambda out: False)
+    st = wizard.WizardState(_stages(), {"settings.json"})
+    st.begin()
+    out = io.StringIO()
+    wizard._render_raw(st, out)
+    text = out.getvalue()
+    assert "[✓]" in text          # settings.json is selected
+    assert "[ ]" in text          # statusline.sh is not
+
+
+def test_render_intro_raw_plain_has_wordmark_and_footer():
+    st = wizard.WizardState(_stages(), set())
+    out = io.StringIO()
+    wizard._render_intro_raw(st, out)
+    text = out.getvalue()
+    assert "\x1b[36m" not in text and "\x1b[1m" not in text   # no SGR styling
+    assert "c c p k g" in text
+    assert "environment-as-code" in text
+    assert "2 stages" in text                                  # orientation line
+    assert "begin" in text and "cancel" in text                # footer
+
+
 def test_initial_preselected_are_ticked():
     st = wizard.WizardState(_stages(), {"settings.json", "superpowers"})
     assert st.is_selected("settings.json")
@@ -200,6 +283,66 @@ def test_raw_mode_loop_aborts_on_eof():
         slave_f.close()
 
 
+def _feed_after_raw(master_fd, data, gap=0.04):
+    """Feed keystrokes to the pty master one byte at a time, on a thread, AFTER
+    the loop has had a beat to enter raw mode. tty.setraw() uses TCSAFLUSH, which
+    discards any input queued before the switch — so bytes written up front never
+    reach os.read. Drip-feeding from a thread lands them in raw mode instead."""
+    import threading
+    import time
+
+    def _drip():
+        time.sleep(gap * 3)                      # let _raw_mode_loop reach setraw
+        for b in data:
+            os.write(master_fd, bytes([b]))
+            time.sleep(gap)
+
+    t = threading.Thread(target=_drip, daemon=True)
+    t.start()
+    return t
+
+
+def test_raw_mode_loop_intro_enter_then_applies():
+    # PTY smoke test of the full raw loop: Enter on the intro begins, then an
+    # Enter per stage walks to review, and a final Enter applies the selection.
+    import pty
+    master, slave = pty.openpty()
+    out = io.StringIO()
+    # begin, stage1->stage2, stage2->review, review->apply  == 4 enters
+    _feed_after_raw(master, b"\r\r\r\r")
+    stream = _PipeKeyStream(slave)
+
+    def _run():
+        return wizard._raw_mode_loop(_stages(), {"settings.json"}, stream, out)
+
+    try:
+        result = _with_timeout(3.0, _run)
+    finally:
+        os.close(slave)
+        os.close(master)
+    assert "settings.json" in result
+    assert "c c p k g" in out.getvalue()        # intro splash was rendered
+
+
+def test_raw_mode_loop_esc_on_intro_cancels():
+    # Esc on the intro splash aborts cleanly (KeyboardInterrupt), restoring term.
+    import pty
+    master, slave = pty.openpty()
+    out = io.StringIO()
+    _feed_after_raw(master, b"\x1b")             # lone Esc on the intro
+    stream = _PipeKeyStream(slave)
+
+    def _run():
+        with pytest.raises(KeyboardInterrupt):
+            wizard._raw_mode_loop(_stages(), set(), stream, out)
+
+    try:
+        _with_timeout(3.0, _run)
+    finally:
+        os.close(slave)
+        os.close(master)
+
+
 def test_run_wizard_empty_stages_returns_preselected():
     # No stages -> nothing to pick; return the preselected set untouched.
     result = wizard.run_wizard([], {"settings.json"},
@@ -238,12 +381,13 @@ def test_render_raw_plain_when_not_a_tty():
 
 
 def test_render_raw_colored_when_enabled(monkeypatch):
-    # With color forced on, the selected entry carries the green (32) SGR code.
+    # With color forced on, the selected entry's checkbox carries the bold-green
+    # (1;32) SGR code.
     monkeypatch.setattr(wizard, "_color_enabled", lambda out: True)
     st = wizard.WizardState(_stages(), {"settings.json"})
     out = io.StringIO()
     wizard._render_raw(st, out)
-    assert "\x1b[32m" in out.getvalue()
+    assert "\x1b[1;32m" in out.getvalue()
 
 
 def test_color_disabled_when_no_color_env(monkeypatch):

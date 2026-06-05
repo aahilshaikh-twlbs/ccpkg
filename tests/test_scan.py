@@ -210,6 +210,34 @@ def test_repo_shippable_files_excludes_vcs_venv_private_ccpkg(tmp_path):
     assert rels == ["README.md", os.path.join("ccpkg", "scan.py")]
 
 
+# ---- scan_repo ----
+
+def test_scan_repo_flags_home_path_in_non_home_base_file(tmp_path):
+    # F2: the un-templated home-path regex now applies to ALL base files, not
+    # only those under home/.claude. A literal /Users/<name> path in a docs/ (or
+    # root) file is flagged. Previously check_home_paths was gated on home/.claude
+    # membership, so this exact case slipped through.
+    root = str(tmp_path)
+    docs = os.path.join(root, "docs")
+    os.makedirs(docs)
+    guide = os.path.join(docs, "guide.md")
+    with open(guide, "w") as fh:
+        fh.write("clone and run from /Users/someone/Code/x\n")
+    findings = scan.scan_repo(root, [])
+    assert any(f.rule == "purity" and f.detail == "/Users/someone"
+               and f.path == guide for f in findings)
+
+
+def test_scan_repo_still_clean_for_templated_paths(tmp_path):
+    # $HOME-relative paths in a non-home base file must NOT trip the home-path
+    # rule — only literal /Users//home do.
+    root = str(tmp_path)
+    with open(os.path.join(root, "README.md"), "w") as fh:
+        fh.write('run python3 "$HOME/.claude/mailbox/hooks/x.py"\n')
+    findings = scan.scan_repo(root, [])
+    assert all(f.rule != "purity" for f in findings)
+
+
 # ---- is_clean ----
 
 def test_is_clean_true_on_empty():
