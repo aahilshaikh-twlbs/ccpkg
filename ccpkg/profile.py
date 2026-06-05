@@ -31,6 +31,10 @@ def load(home):
             data = json.load(fh)
         if not isinstance(data, dict):
             return None
+        # A dict carrying NEITHER key is treated as absent (e.g. {}), so the
+        # caller falls back to defaults/wizard rather than installing nothing.
+        if "selected" not in data and "deselected" not in data:
+            return None
         sel = data.get("selected", [])
         des = data.get("deselected", [])
         if not isinstance(sel, list) or not isinstance(des, list):
@@ -43,8 +47,8 @@ def load(home):
 
 def save(home, prof):
     # type: (str, Profile) -> None
-    """Write the profile atomically-ish (write then replace). Never raises on
-    a missing home dir it can create."""
+    """Write the profile atomically (tmp file + os.replace), creating the home
+    dir if missing. May raise OSError on an unwritable path."""
     os.makedirs(home, exist_ok=True)
     tmp = _path(home) + ".tmp"
     with open(tmp, "w", encoding="utf-8") as fh:
