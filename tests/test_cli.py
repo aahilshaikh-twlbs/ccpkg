@@ -125,7 +125,8 @@ def test_main_install_invokes_installer_and_prints_report(tmp_repo, tmp_home, mo
     _patch_resolution(monkeypatch, tmp_repo, tmp_home)
     captured = {}
 
-    def _fake_install(root, home_target, env, os_name, run=subprocess.run, interactive=False):
+    def _fake_install(root, home_target, env, os_name, run=subprocess.run,
+                      interactive=False, selected=None):
         captured["root"] = root
         captured["home_target"] = home_target
         captured["os_name"] = os_name
@@ -216,6 +217,106 @@ def test_main_no_subcommand_prints_help_nonzero(tmp_repo, tmp_home, monkeypatch,
     assert rc != 0
     out = capsys.readouterr().out
     assert "usage" in out.lower()
+
+
+def test_install_parser_accepts_new_flags():
+    from ccpkg import cli
+    parser = cli._build_parser()
+    args = parser.parse_args(["install", "--yes"])
+    assert args.yes is True
+    args = parser.parse_args(["install", "--reconfigure"])
+    assert args.reconfigure is True
+    args = parser.parse_args(["install", "--non-interactive"])
+    assert args.yes is True            # --non-interactive aliases --yes
+
+
+def _stub_install(*a, **k):
+    # A fast installer.install double: a valid empty InstallReport, no side effects.
+    return installer.InstallReport(
+        os="darwin", deps={}, base_applied=[], overlay_applied=[],
+        plugins={}, mailbox={}, scan_findings=[], notes=[],
+    )
+
+
+def test_install_yes_is_headless_and_writes_no_profile(tmp_repo, tmp_home, monkeypatch):
+    from ccpkg import cli, profile
+    monkeypatch.setattr(cli.config, "repo_root", lambda: tmp_repo)
+    monkeypatch.setattr(cli.config, "home_target", lambda: tmp_home)
+    # --yes with NO prior profile applies defaults headlessly; the wizard never
+    # ran, so NO profile is persisted (the wizard owns the profile).
+    rc = cli.main(["install", "--yes"])
+    assert rc == 0
+    assert profile.load(tmp_home) is None
+
+
+def test_install_wizard_path_writes_profile(tmp_repo, tmp_home, monkeypatch):
+    from ccpkg import cli, profile, wizard
+    monkeypatch.setattr(cli.config, "repo_root", lambda: tmp_repo)
+    monkeypatch.setattr(cli.config, "home_target", lambda: tmp_home)
+    monkeypatch.setattr(cli, "_stdin_is_tty", lambda: True)
+    monkeypatch.setattr(wizard, "run_wizard", lambda stages, pre: {"settings.json"})
+    monkeypatch.setattr(installer, "install", _stub_install)
+
+    rc = cli.main(["install"])           # interactive TTY path, no prior profile
+    assert rc == 0
+    prof = profile.load(tmp_home)
+    assert prof is not None
+    assert prof.selected == ["settings.json"]
+
+
+def test_install_reconfigure_writes_profile(tmp_repo, tmp_home, monkeypatch):
+    from ccpkg import cli, profile, wizard
+    monkeypatch.setattr(cli.config, "repo_root", lambda: tmp_repo)
+    monkeypatch.setattr(cli.config, "home_target", lambda: tmp_home)
+    profile.save(tmp_home, profile.Profile(selected=["settings.json"], deselected=[]))
+    monkeypatch.setattr(cli, "_stdin_is_tty", lambda: True)
+    monkeypatch.setattr(wizard, "run_wizard",
+                        lambda stages, pre: {"settings.json", "statusline.sh"})
+    monkeypatch.setattr(installer, "install", _stub_install)
+
+    rc = cli.main(["install", "--reconfigure"])
+    assert rc == 0
+    prof = profile.load(tmp_home)
+    assert set(prof.selected) == {"settings.json", "statusline.sh"}
+
+
+def test_install_replay_does_not_rewrite_profile(tmp_repo, tmp_home, monkeypatch):
+    from ccpkg import cli, profile
+    monkeypatch.setattr(cli.config, "repo_root", lambda: tmp_repo)
+    monkeypatch.setattr(cli.config, "home_target", lambda: tmp_home)
+    profile.save(tmp_home, profile.Profile(selected=["settings.json"],
+                                           deselected=["statusline.sh"]))
+    monkeypatch.setattr(installer, "install", _stub_install)
+    monkeypatch.setattr(cli, "_stdin_is_tty", lambda: True)
+
+    saved = {"called": False}
+    monkeypatch.setattr(profile, "save",
+                        lambda *a, **k: saved.__setitem__("called", True))
+
+    rc = cli.main(["install"])           # profile present, not reconfigure -> replay
+    assert rc == 0
+    assert saved["called"] is False      # replay must NOT rewrite the profile
+
+
+def test_install_ctrl_c_during_wizard_cancels(tmp_repo, tmp_home, monkeypatch, capsys):
+    from ccpkg import cli, wizard
+    monkeypatch.setattr(cli.config, "repo_root", lambda: tmp_repo)
+    monkeypatch.setattr(cli.config, "home_target", lambda: tmp_home)
+    monkeypatch.setattr(cli, "_stdin_is_tty", lambda: True)
+
+    def _boom(stages, pre):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(wizard, "run_wizard", _boom)
+
+    def _no_install(*a, **k):
+        raise AssertionError("installer.install must not run after Ctrl-C")
+
+    monkeypatch.setattr(installer, "install", _no_install)
+
+    rc = cli.main(["install"])
+    assert rc == 130
+    assert "cancelled" in capsys.readouterr().out.lower()
 
 
 def test_dunder_main_calls_sys_exit(tmp_repo, tmp_home, monkeypatch):

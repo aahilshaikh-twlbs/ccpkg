@@ -20,6 +20,26 @@ cp local.env.example local.env   # edit per-machine values (optional)
 [SETUP.md](./SETUP.md). For how Claude reconstructs the environment, see
 [CLAUDE.md](./CLAUDE.md).
 
+### Interactive install
+
+Run in a terminal, `ccpkg install` opens an interactive feature picker. Features are
+grouped into staged screens (Core, Commands, Skills, Plugins, Coordination, and an Overlay
+stage when an overlay is configured). Use the arrow keys to move, space to toggle an item,
+Enter to advance to the next stage, and Esc to go back. Your choice is saved to
+`~/.claude/.ccpkg-profile.json` and replayed automatically on later runs.
+
+```text
+Interactive install
+  ccpkg install              # feature picker (when run in a terminal)
+  ccpkg install --yes        # headless: apply saved profile or defaults
+  ccpkg install --reconfigure  # re-open the picker
+Selections persist to ~/.claude/.ccpkg-profile.json.
+```
+
+`--yes` (alias `--non-interactive`) is fully headless — it applies the saved profile, or
+the defaults if none exists, with no prompts. `install.sh` uses it so the bootstrap never
+blocks. `--reconfigure` re-opens the picker even when a profile already exists.
+
 ## The base / overlay model
 
 The setup is split into two layers so the public repo stays clean and shareable:

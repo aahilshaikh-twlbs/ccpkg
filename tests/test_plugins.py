@@ -83,3 +83,15 @@ def test_cli_install_never_raises_on_run_failure():
     # have=True so it attempts to run; boom raises -> must be swallowed
     result = plugins.cli_install(run=boom, have=lambda cmd: True)
     assert result == {p: "failed" for p in plugins.PLUGINS}
+
+
+def test_cli_install_only_filters_targets():
+    from ccpkg import plugins
+    def have(_): return True
+    calls = []
+    def run(cmd, **kw):
+        calls.append(cmd)
+        class R: returncode = 0
+        return R()
+    out = plugins.cli_install(run=run, have=have, only={"superpowers@claude-plugins-official"})
+    assert set(out) == {"superpowers@claude-plugins-official"}

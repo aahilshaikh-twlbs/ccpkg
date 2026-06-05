@@ -49,14 +49,17 @@ def ensure_plugin_settings(settings):
     return out
 
 
-def cli_install(run=subprocess.run, have=osenv.have):
-    # type: (...) -> Dict[str, str]
+def cli_install(run=subprocess.run, have=osenv.have, only=None):
+    # type: (..., object) -> Dict[str, str]
     """Best-effort install of PLUGINS via the `claude` CLI. If `claude` is not
     present, every plugin is "skipped" and nothing is executed. Otherwise add
     the marketplace then install each plugin; a plugin maps to "installed" on
-    success or "failed" if its install command errors. Never raises."""
+    success or "failed" if its install command errors. Never raises.
+
+    When `only` is a set of plugin ids, restrict the targets to that subset."""
+    targets = list(PLUGINS) if only is None else [p for p in PLUGINS if p in only]
     if not have("claude"):
-        return {plugin: "skipped" for plugin in PLUGINS}
+        return {plugin: "skipped" for plugin in targets}
 
     # marketplace add is best-effort; failure here does not abort installs.
     try:
@@ -65,7 +68,7 @@ def cli_install(run=subprocess.run, have=osenv.have):
         pass
 
     status = {}  # type: Dict[str, str]
-    for plugin in PLUGINS:
+    for plugin in targets:
         try:
             run(["claude", "plugin", "install", plugin])
             status[plugin] = "installed"

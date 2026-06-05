@@ -7,6 +7,18 @@ from ccpkg import installer
 from ccpkg.installer import InstallReport, install, clone_overlay
 
 
+class _FakeResult:
+    def __init__(self, returncode=0, stdout=""):
+        self.returncode = returncode
+        self.stdout = stdout
+
+
+def _fake_run():
+    def run(cmd, **kwargs):
+        return _FakeResult(0, "")
+    return run
+
+
 def _env(overlay_dir="", overlay_repo="", vault_root=""):
     # Minimal env dict in the shape localenv.load() produces (contract §3 DEFAULTS keys).
     return {
@@ -173,3 +185,31 @@ def test_clone_overlay_never_raises_on_git_failure(tmp_home, monkeypatch):
 
     # Must not raise; returns None on clone failure.
     assert clone_overlay(env, run=failing_run) is None
+
+
+def test_install_filters_base_items_by_selection(tmp_repo, tmp_home):
+    from ccpkg import installer
+    # only settings.json selected; statusline.sh deselected
+    report = installer.install(
+        tmp_repo, tmp_home, env={}, os_name="darwin",
+        run=_fake_run(), selected={"settings.json"})
+    applied = {p for p, _ in report.base_applied}
+    assert "settings.json" in applied
+    assert "statusline.sh" not in applied
+
+
+def test_install_skips_mailbox_when_not_selected(tmp_repo, tmp_home):
+    from ccpkg import installer
+    report = installer.install(
+        tmp_repo, tmp_home, env={}, os_name="darwin",
+        run=_fake_run(), selected={"settings.json"})  # 'mailbox' absent
+    assert report.mailbox.get("status") in (None, "skipped") or report.mailbox == {}
+
+
+def test_install_none_selection_applies_all(tmp_repo, tmp_home):
+    from ccpkg import installer
+    report = installer.install(
+        tmp_repo, tmp_home, env={}, os_name="darwin",
+        run=_fake_run(), selected=None)
+    applied = {p for p, _ in report.base_applied}
+    assert "statusline.sh" in applied   # unchanged full behavior

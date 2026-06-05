@@ -117,3 +117,43 @@ def test_applies_to_os_specific_filters():
     darwin_item = manifest.Item(path="a", mode="symlink", os="darwin", layer="base")
     assert manifest.applies_to_os(darwin_item, "darwin") is True
     assert manifest.applies_to_os(darwin_item, "linux") is False
+
+
+def test_parse_reads_presentation_metadata(tmp_path):
+    path = _write_manifest(
+        tmp_path,
+        {"items": [
+            {"path": "skills/shannon", "mode": "symlink", "group": "Skills",
+             "desc": "autonomous pentester", "default": True, "required": False},
+        ]},
+    )
+    items = manifest.parse(path)
+    assert items[0].group == "Skills"
+    assert items[0].desc == "autonomous pentester"
+    assert items[0].default is True
+    assert items[0].required is False
+
+
+def test_parse_presentation_metadata_defaults(tmp_path):
+    # An entry with no presentation fields parses with safe defaults (backward compat).
+    path = _write_manifest(
+        tmp_path,
+        {"items": [{"path": "settings.json", "mode": "merge"}]},
+    )
+    item = manifest.parse(path)[0]
+    assert item.group == "Core"
+    assert item.desc == ""
+    assert item.default is True
+    assert item.required is False
+
+
+def test_repo_manifest_items_are_grouped():
+    # The real shipped manifest annotates every base item with a non-empty group.
+    from ccpkg import config
+    items = manifest.parse(config.manifest_path(config.repo_root()))
+    groups = {i.group for i in items}
+    assert "Core" in groups
+    assert "Commands" in groups
+    assert "Skills" in groups
+    # every item has a human description
+    assert all(i.desc for i in items)
