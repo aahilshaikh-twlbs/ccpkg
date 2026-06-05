@@ -1,4 +1,4 @@
-# claude-setup
+# CCPKG (claude-code-package)
 
 Claude Code environment as code. A single repository you can hand to a fresh Claude Code
 install — on macOS or Ubuntu — and have your entire non-vanilla setup reconstructed:
