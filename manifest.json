@@ -7,6 +7,8 @@
     {"path": "yearly-cost.sh", "mode": "symlink", "os": "any", "layer": "base", "group": "Core", "desc": "yearly cost report script", "default": true},
     {"path": "commands/create-prd.md", "mode": "symlink", "os": "any", "layer": "base", "group": "Commands", "desc": "generate a PRD from context", "default": true},
     {"path": "commands/handoff.md", "mode": "symlink", "os": "any", "layer": "base", "group": "Commands", "desc": "structured session handoff", "default": true},
+    {"path": "commands/nuke.md", "mode": "symlink", "os": "any", "layer": "base", "group": "Commands", "desc": "arm sticky session-long max-effort nuke mode", "default": true},
+    {"path": "hooks/nuke.py", "mode": "symlink", "os": "any", "layer": "base", "group": "Hooks", "desc": "nuke mode hook: arm/inject directive, clear on session end", "default": true},
     {"path": "skills/shannon", "mode": "symlink", "os": "any", "layer": "base", "group": "Skills", "desc": "autonomous pentester", "default": true}
   ]
 }
