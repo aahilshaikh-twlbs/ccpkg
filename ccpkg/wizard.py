@@ -4,7 +4,9 @@ WizardState is a pure, I/O-free state machine (unit-tested directly). The
 renderers (raw-mode termios + numbered fallback) are added separately and only
 drive this state.
 """
+import os
 import select
+import shutil
 import sys
 from typing import List, Optional, Set
 
@@ -121,6 +123,93 @@ _CLEAR = "\x1b[2J\x1b[H"
 _HIDE_CURSOR = "\x1b[?25l"
 _SHOW_CURSOR = "\x1b[?25h"
 
+# Glyphs (single display column each).
+_DOT_DONE = "●"   # ● completed/current stage
+_DOT_TODO = "○"   # ○ pending stage
+_BOX_SEL = "◉"    # ◉ selected entry
+_BOX_OFF = "○"    # ○ unselected entry
+_POINTER = "▸"    # ▸ cursor
+
+
+class _Palette:
+    """SGR wrapper. When `on` is False every method is a no-op passthrough, so
+    the same render code produces plain text for non-TTY/NO_COLOR output."""
+
+    def __init__(self, enabled):
+        # type: (bool) -> None
+        self.on = bool(enabled)
+
+    def _w(self, code, s):
+        # type: (str, str) -> str
+        return ("\x1b[%sm%s\x1b[0m" % (code, s)) if self.on else s
+
+    def header(self, s):  # bold cyan
+        return self._w("1;36", s)
+
+    def accent(self, s):  # cyan
+        return self._w("36", s)
+
+    def cursor(self, s):  # bold cyan pointer
+        return self._w("1;36", s)
+
+    def dim(self, s):
+        return self._w("2", s)
+
+    def sel(self, s):     # green
+        return self._w("32", s)
+
+    def bold(self, s):
+        return self._w("1", s)
+
+    def warn(self, s):    # yellow
+        return self._w("33", s)
+
+
+def _color_enabled(out):
+    # type: (object) -> bool
+    if os.environ.get("NO_COLOR"):
+        return False
+    try:
+        return bool(out.isatty())
+    except Exception:
+        return False
+
+
+def _term_width(out):
+    # type: (object) -> int
+    try:
+        cols = shutil.get_terminal_size((76, 24)).columns
+    except Exception:
+        cols = 76
+    return max(54, min(cols, 84))
+
+
+def _emit_top(out, title, crumb, width, pal):
+    # type: (object, str, str, int, _Palette) -> None
+    """Top rule: ┌─ <title> ──────── <crumb> ─┐ spanning `width` columns."""
+    left = "┌─ " + title + " "
+    right = " " + crumb + " ─┐"
+    fill = max(1, width - len(left) - len(right))
+    if pal.on:
+        out.write("\x1b[36m┌─ \x1b[1m" + title + "\x1b[22m\x1b[36m "
+                  + "─" * fill + " \x1b[1m" + crumb
+                  + "\x1b[22m\x1b[36m ─┐\x1b[0m\r\n")
+    else:
+        out.write(left + "─" * fill + right + "\r\n")
+
+
+def _emit_footer(out, left, right, width, pal):
+    # type: (object, str, str, int, _Palette) -> None
+    pad = max(2, width - len(left) - len(right) - 2)
+    out.write(pal.dim("  " + left + " " * pad + right) + "\r\n")
+
+
+def _stage_dots(state, pal):
+    # type: (WizardState, _Palette) -> str
+    return "".join(
+        pal.accent(_DOT_DONE) if i <= state.stage_index else pal.dim(_DOT_TODO)
+        for i in range(len(state.stages)))
+
 
 def _render_numbered(state, out):
     # type: (WizardState, object) -> None
@@ -163,20 +252,24 @@ def _render_review_numbered(state, out):
 
 def _render_review_raw(state, out):
     # type: (WizardState, object) -> None
+    pal = _Palette(_color_enabled(out))
+    width = _term_width(out)
     out.write(_CLEAR)
-    out.write("  ccpkg install - review selection\r\n\r\n")
+    _emit_top(out, "ccpkg install", "review selection", width, pal)
+    out.write("\r\n")
     for stage in state.stages:
-        out.write("  %s:\r\n" % stage.name)
+        out.write("  %s\r\n" % pal.bold(stage.name))
         chosen = [e for e in stage.entries if state.is_selected(e.id)]
         if chosen:
             for e in chosen:
-                out.write("    [x] %s\r\n" % e.id)
+                out.write("    %s %s\r\n" % (pal.sel(_BOX_SEL), e.id))
         else:
-            out.write("    (none)\r\n")
+            out.write("    %s\r\n" % pal.dim("(none)"))
     warn = _soft_warning(state)
     if warn:
-        out.write("\r\n  %s\r\n" % warn)
-    out.write("\r\n   [ Esc Back ]              [ Enter Apply ]\r\n")
+        out.write("\r\n  %s\r\n" % pal.warn(warn))
+    out.write("\r\n")
+    _emit_footer(out, "[ esc back ]", "[ ⏎ apply ]", width, pal)
     out.flush()
 
 
@@ -243,41 +336,62 @@ def _is_tty(stream):
 
 def _render_raw(state, out):
     # type: (WizardState, object) -> None
+    pal = _Palette(_color_enabled(out))
+    width = _term_width(out)
     stage = state.current_stage()
     out.write(_CLEAR)
-    out.write("  ccpkg install - select features        "
-              "[stage %d/%d: %s]\r\n\r\n"
-              % (state.stage_index + 1, len(state.stages), stage.name))
-    out.write("   Space toggle - up/down move - Enter next - a all - n none - Esc back\r\n\r\n")
+    _emit_top(out, "ccpkg install",
+              "stage %d/%d · %s" % (state.stage_index + 1,
+                                    len(state.stages), stage.name),
+              width, pal)
+    out.write("\r\n")
+    hint = pal.dim("space toggle · ↑↓ move · ⏎ next · a all · n none · esc back")
+    out.write("  %s   %s\r\n\r\n" % (_stage_dots(state, pal), hint))
     for i, e in enumerate(stage.entries):
-        pointer = ">" if i == state.cursor else " "
-        mark = "x" if state.is_selected(e.id) else " "
-        out.write(" %s [%s] %-22s %s\r\n" % (pointer, mark, e.id, e.desc))
-    out.write("\r\n   [ Esc Back ]              [ Enter Continue -> ]\r\n")
+        is_cur = (i == state.cursor)
+        sel = state.is_selected(e.id)
+        pointer = pal.cursor(_POINTER) if is_cur else " "
+        box = pal.sel(_BOX_SEL) if sel else pal.dim(_BOX_OFF)
+        name = "%-20s" % e.id
+        name = pal.bold(name) if is_cur else name
+        out.write(" %s %s %s %s\r\n" % (pointer, box, name, pal.dim(e.desc)))
+    out.write("\r\n")
+    _emit_footer(out, "[ esc back ]", "[ ⏎ continue → ]", width, pal)
     out.flush()
+
+
+# Seconds to wait for a CSI tail before treating a bare ESC as the 'back' key.
+# Small enough to be imperceptible, large enough that the [A/[B tail of an arrow
+# key reliably arrives even when it lands a beat after the ESC byte.
+_ESC_TAIL_TIMEOUT = 0.05
 
 
 def _read_key(in_stream):
     # type: (object) -> str
-    ch = in_stream.read(1)
-    if ch == "\x1b":
-        # Read CSI-tail bytes (arrows) ONLY while they are already pending, so a
-        # lone Esc — a documented 'back' key — never blocks in raw mode (VMIN=1).
-        rest = ""
-        try:
-            fd = in_stream.fileno()
-            while len(rest) < 2:
-                r, _, _ = select.select([fd], [], [], 0)
-                if not r:
-                    break
-                nxt = in_stream.read(1)
-                if nxt == "":
-                    break
-                rest += nxt
-        except Exception:
-            return "esc"
-        return _decode_key(ch + rest) if rest else _decode_key(ch)
-    return _decode_key(ch)
+    # Read raw bytes straight off the fd via os.read. Reading through a buffered
+    # stream (e.g. sys.stdin) pulls the whole escape *burst* into Python's
+    # userspace buffer on the first read and returns only the ESC byte — leaving
+    # the "[A" tail invisible to select() on the fd, so every arrow decoded as a
+    # lone ESC and fired 'back'. os.read takes exactly one byte from the kernel,
+    # leaving the tail where select() can see it.
+    fd = in_stream.fileno()
+    first = os.read(fd, 1)
+    if first == b"":
+        return ""
+    if first == b"\x1b":
+        # Consume the CSI tail ONLY while bytes are actually pending, so a lone
+        # Esc — a documented 'back' key — returns promptly instead of blocking.
+        rest = b""
+        while len(rest) < 2:
+            r, _, _ = select.select([fd], [], [], _ESC_TAIL_TIMEOUT)
+            if not r:
+                break
+            nxt = os.read(fd, 1)
+            if nxt == b"":
+                break
+            rest += nxt
+        return _decode_key((first + rest).decode("latin-1"))
+    return _decode_key(first.decode("latin-1"))
 
 
 def _raw_mode_loop(stages, preselected, in_stream, out_stream):

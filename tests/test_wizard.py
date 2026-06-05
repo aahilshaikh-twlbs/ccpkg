@@ -226,6 +226,34 @@ def test_run_wizard_falls_back_when_raw_mode_crashes(monkeypatch):
     assert "settings.json" in result
 
 
+def test_render_raw_plain_when_not_a_tty():
+    # StringIO.isatty() is False -> renderer must emit NO color (SGR) codes, but
+    # still carry the structure (box rule + the entry text).
+    st = wizard.WizardState(_stages(), {"settings.json"})
+    out = io.StringIO()
+    wizard._render_raw(st, out)
+    text = out.getvalue()
+    assert "\x1b[36m" not in text and "\x1b[1m" not in text  # no SGR styling
+    assert "┌─" in text and "settings.json" in text          # structure intact
+
+
+def test_render_raw_colored_when_enabled(monkeypatch):
+    # With color forced on, the selected entry carries the green (32) SGR code.
+    monkeypatch.setattr(wizard, "_color_enabled", lambda out: True)
+    st = wizard.WizardState(_stages(), {"settings.json"})
+    out = io.StringIO()
+    wizard._render_raw(st, out)
+    assert "\x1b[32m" in out.getvalue()
+
+
+def test_color_disabled_when_no_color_env(monkeypatch):
+    class _TTY(io.StringIO):
+        def isatty(self):
+            return True
+    monkeypatch.setenv("NO_COLOR", "1")
+    assert wizard._color_enabled(_TTY()) is False
+
+
 def test_soft_warning_present_when_settings_deselected():
     warn = wizard._soft_warning(wizard.WizardState(_stages(), set()))
     assert warn is not None
