@@ -145,3 +145,15 @@ def test_parse_presentation_metadata_defaults(tmp_path):
     assert item.desc == ""
     assert item.default is True
     assert item.required is False
+
+
+def test_repo_manifest_items_are_grouped():
+    # The real shipped manifest annotates every base item with a non-empty group.
+    from ccpkg import config
+    items = manifest.parse(config.manifest_path(config.repo_root()))
+    groups = {i.group for i in items}
+    assert "Core" in groups
+    assert "Commands" in groups
+    assert "Skills" in groups
+    # every item has a human description
+    assert all(i.desc for i in items)
