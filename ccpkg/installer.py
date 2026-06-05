@@ -80,9 +80,12 @@ def _auth_note(report, run, have):
         report.notes.append("auth: could not determine claude login status (%s)" % exc)
 
 
-def install(root, home_target, env, os_name, run=subprocess.run, interactive=False):
-    # type: (str, str, Dict[str, str], str, object, bool) -> InstallReport
-    """Run the 8-step install (contract section 12). Never raises; sub-step failures -> notes."""
+def install(root, home_target, env, os_name, run=subprocess.run,
+            interactive=False, selected=None):
+    # type: (str, str, Dict[str, str], str, object, bool, object) -> InstallReport
+    """Run the install pipeline. When `selected` is a set of ids, only those
+    manifest items / overlay items / plugins / mailbox are applied; when None,
+    everything applies (legacy behavior). Never raises; sub-step failures -> notes."""
     report = InstallReport(os=os_name)
 
     # 1. dependencies
@@ -104,6 +107,8 @@ def install(root, home_target, env, os_name, run=subprocess.run, interactive=Fal
     # 3. base layer
     try:
         items = manifest.parse(config.manifest_path(root))
+        if selected is not None:
+            items = [it for it in items if it.path in selected]
         report.base_applied = apply_mod.apply_layer(
             items, "base", base_src, home_target, tvars, vault_enabled, os_name
         )
@@ -117,6 +122,8 @@ def install(root, home_target, env, os_name, run=subprocess.run, interactive=Fal
             ov_manifest = os.path.join(overlay_dir, "manifest.json")
             ov_src = config.home_claude_src(overlay_dir)
             ov_items = manifest.parse(ov_manifest)
+            if selected is not None:
+                ov_items = [it for it in ov_items if it.path in selected]
             report.overlay_applied = apply_mod.apply_layer(
                 ov_items, "overlay", ov_src, home_target, tvars, vault_enabled, os_name
             )
@@ -125,13 +132,22 @@ def install(root, home_target, env, os_name, run=subprocess.run, interactive=Fal
 
     # 5. plugins (best-effort; settings already carry enabledPlugins via base merge)
     try:
-        report.plugins = plugins.cli_install(run=run, have=osenv.have)
+        if selected is None:
+            report.plugins = plugins.cli_install(run=run, have=osenv.have)
+        else:
+            wanted = {p for p in plugins.PLUGINS
+                      if p.split("@", 1)[0] in selected}
+            report.plugins = plugins.cli_install(
+                run=run, have=osenv.have, only=wanted)
     except Exception as exc:
         report.notes.append("plugins: %s" % exc)
 
     # 6. mailbox
     try:
-        report.mailbox = mailbox_install.install(root, home_target, run=run)
+        if selected is None or "mailbox" in selected:
+            report.mailbox = mailbox_install.install(root, home_target, run=run)
+        else:
+            report.mailbox = {"status": "skipped"}
     except Exception as exc:
         report.notes.append("mailbox: %s" % exc)
 
