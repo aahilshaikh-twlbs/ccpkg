@@ -24,6 +24,14 @@
             "command": "python3 $HOME/.claude/mailbox/hooks/user_prompt_submit.py"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 $HOME/.claude/hooks/nuke.py"
+          }
+        ]
       }
     ],
     "Stop": [
@@ -113,6 +121,14 @@
           {
             "type": "command",
             "command": "python3 $HOME/.claude/mailbox/hooks/session_end.py"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 $HOME/.claude/hooks/nuke.py"
           }
         ]
       }
