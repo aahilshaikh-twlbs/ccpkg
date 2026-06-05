@@ -174,7 +174,19 @@ def _cmd_pull(root, home, env, os_name):
     return 0
 
 
+def _is_git_checkout(root):
+    # type: (str) -> bool
+    return os.path.isdir(os.path.join(root, ".git"))
+
+
 def _cmd_push(root, home, env, os_name, paths):
+    if config.is_packaged() or not _is_git_checkout(root) or not os.access(root, os.W_OK):
+        print(
+            "ccpkg push: requires a git checkout of ccpkg; clone the repo for the "
+            "dev workflow (this looks like a packaged / read-only install).",
+            file=sys.stderr,
+        )
+        return 2
     summary = push.push(root, home, env, paths, os_name=os_name)
     for bucket in ("written", "skipped", "blocked"):
         for p in summary.get(bucket, []):
