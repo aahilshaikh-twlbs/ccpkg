@@ -59,3 +59,39 @@ def test_repo_root_ignores_nonexistent_ccpkg_root(monkeypatch, tmp_path):
     # falls back to dev root; not treated as packaged
     assert config.repo_root() != bogus
     assert config.is_packaged() is False
+
+
+def test_localenv_explicit_override_wins(monkeypatch, tmp_path):
+    target = os.path.join(str(tmp_path), "custom.env")
+    monkeypatch.setenv("CCPKG_LOCAL_ENV", target)
+    assert config.localenv_path("/any/root") == target
+
+
+def test_localenv_prefers_existing_xdg(monkeypatch, tmp_path):
+    monkeypatch.delenv("CCPKG_LOCAL_ENV", raising=False)
+    xdg = os.path.join(str(tmp_path), "xdg")
+    monkeypatch.setenv("XDG_CONFIG_HOME", xdg)
+    os.makedirs(os.path.join(xdg, "ccpkg"))
+    xdg_env = os.path.join(xdg, "ccpkg", "local.env")
+    with open(xdg_env, "w") as fh:
+        fh.write("CODE_ROOT=/x\n")
+    assert config.localenv_path(str(tmp_path)) == xdg_env
+
+
+def test_localenv_dev_fallback_when_repo_file_exists(monkeypatch, tmp_path):
+    monkeypatch.delenv("CCPKG_LOCAL_ENV", raising=False)
+    monkeypatch.setenv("XDG_CONFIG_HOME", os.path.join(str(tmp_path), "empty-xdg"))
+    monkeypatch.delenv("CCPKG_ROOT", raising=False)
+    repo_env = os.path.join(str(tmp_path), "local.env")
+    with open(repo_env, "w") as fh:
+        fh.write("CODE_ROOT=/y\n")
+    assert config.localenv_path(str(tmp_path)) == repo_env
+
+
+def test_localenv_default_packaged_is_xdg(monkeypatch, tmp_path):
+    monkeypatch.delenv("CCPKG_LOCAL_ENV", raising=False)
+    monkeypatch.setenv("XDG_CONFIG_HOME", os.path.join(str(tmp_path), "xdg"))
+    monkeypatch.setenv("CCPKG_ROOT", str(tmp_path))  # packaged
+    # nothing exists yet -> packaged default is the XDG path
+    expected = os.path.join(str(tmp_path), "xdg", "ccpkg", "local.env")
+    assert config.localenv_path(str(tmp_path)) == expected

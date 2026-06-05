@@ -46,10 +46,27 @@ def manifest_path(root):
     return os.path.join(root, "manifest.json")
 
 
+def user_config_dir():
+    # type: () -> str
+    """Per-user config dir: $XDG_CONFIG_HOME/ccpkg (default ~/.config/ccpkg)."""
+    base = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+    return os.path.join(base, "ccpkg")
+
+
 def localenv_path(root):
     # type: (str) -> str
-    """The per-machine env file: <root>/local.env."""
-    return os.path.join(root, "local.env")
+    """Per-machine env file. First existing of: $CCPKG_LOCAL_ENV, the XDG path
+    (~/.config/ccpkg/local.env), <root>/local.env. If none exist, the packaged
+    default is the XDG path; the dev default is <root>/local.env."""
+    explicit = os.environ.get("CCPKG_LOCAL_ENV")
+    if explicit:
+        return explicit
+    xdg = os.path.join(user_config_dir(), "local.env")
+    dev = os.path.join(root, "local.env")
+    for candidate in (xdg, dev):
+        if os.path.isfile(candidate):
+            return candidate
+    return xdg if is_packaged() else dev
 
 
 def backup_suffix():
