@@ -4,6 +4,8 @@ WizardState is a pure, I/O-free state machine (unit-tested directly). The
 renderers (raw-mode termios + numbered fallback) are added separately and only
 drive this state.
 """
+import select
+import sys
 from typing import List, Set
 
 from .selection import Stage
@@ -83,9 +85,6 @@ class WizardState:
             self.cursor = 0
 
 
-import sys
-
-
 def _decode_key(seq):
     # type: (str) -> str
     mapping = {
@@ -146,8 +145,15 @@ def run_wizard(stages, preselected, in_stream=None, out_stream=None):
     the numbered fallback."""
     in_stream = in_stream if in_stream is not None else sys.stdin
     out_stream = out_stream if out_stream is not None else sys.stdout
+    if not stages:
+        return set(preselected)
     if _is_tty(in_stream) and _is_tty(out_stream):
-        return _raw_mode_loop(stages, preselected, in_stream, out_stream)
+        # KeyboardInterrupt (BaseException) propagates for a clean Ctrl-C; any
+        # other failure (e.g. missing termios) degrades to the numbered renderer.
+        try:
+            return _raw_mode_loop(stages, preselected, in_stream, out_stream)
+        except Exception:
+            return _numbered_fallback(stages, preselected, in_stream, out_stream)
     return _numbered_fallback(stages, preselected, in_stream, out_stream)
 
 
@@ -179,8 +185,21 @@ def _read_key(in_stream):
     # type: (object) -> str
     ch = in_stream.read(1)
     if ch == "\x1b":
-        # try to read a 2-char CSI sequence (arrows); non-blocking-ish best effort
-        rest = in_stream.read(2)
+        # Read CSI-tail bytes (arrows) ONLY while they are already pending, so a
+        # lone Esc — a documented 'back' key — never blocks in raw mode (VMIN=1).
+        rest = ""
+        try:
+            fd = in_stream.fileno()
+            while len(rest) < 2:
+                r, _, _ = select.select([fd], [], [], 0)
+                if not r:
+                    break
+                nxt = in_stream.read(1)
+                if nxt == "":
+                    break
+                rest += nxt
+        except Exception:
+            return "esc"
         return _decode_key(ch + rest) if rest else _decode_key(ch)
     return _decode_key(ch)
 
@@ -198,7 +217,8 @@ def _raw_mode_loop(stages, preselected, in_stream, out_stream):
         while not state.is_done():
             _render_raw(state, out_stream)
             key = _read_key(in_stream)
-            if key == "ctrl-c":
+            if key == "" or key == "ctrl-c":
+                # EOF or Ctrl-C: abort. The finally below restores the terminal.
                 raise KeyboardInterrupt
             elif key == "up":
                 state.move(-1)
