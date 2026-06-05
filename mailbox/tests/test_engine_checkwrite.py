@@ -129,3 +129,22 @@ def test_conflict_scope_is_only_shared_boards(engine, tmp_path):
     assert a["decision"] == "allow"
     assert b["decision"] == "allow"
     assert path_matches  # imported symbol is used by engine; sanity reference
+
+
+def test_check_write_allowed_after_holder_releases_auto(engine, clock):
+    clock.t = 1000.0
+    engine.join("s1", "alice", "/repo")
+    engine.join("s2", "bob", "/repo")
+
+    # s1 auto-claims a file by writing it; s2 is then denied.
+    engine.check_write("s1", "/repo/shared.py")
+    denied = engine.check_write("s2", "/repo/shared.py")
+    assert denied["decision"] == "deny"
+    assert denied["holder"] == "alice"
+
+    # s1's turn ends -> auto-claims released.
+    engine.release("s1", "auto")
+
+    # s2 may now write the same file.
+    allowed = engine.check_write("s2", "/repo/shared.py")
+    assert allowed["decision"] == "allow"
