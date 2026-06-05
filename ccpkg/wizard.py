@@ -86,6 +86,24 @@ class WizardState:
 import sys
 
 
+def _decode_key(seq):
+    # type: (str) -> str
+    mapping = {
+        "\x1b[A": "up", "\x1b[B": "down", "\x1b[C": "right", "\x1b[D": "left",
+        "\r": "enter", "\n": "enter", " ": "space", "\x1b": "esc",
+        "\x03": "ctrl-c",
+    }
+    if seq in mapping:
+        return mapping[seq]
+    return seq
+
+
+# ANSI helpers
+_CLEAR = "\x1b[2J\x1b[H"
+_HIDE_CURSOR = "\x1b[?25l"
+_SHOW_CURSOR = "\x1b[?25h"
+
+
 def _render_numbered(state, out):
     # type: (WizardState, object) -> None
     stage = state.current_stage()
@@ -141,7 +159,63 @@ def _is_tty(stream):
         return False
 
 
+def _render_raw(state, out):
+    # type: (WizardState, object) -> None
+    stage = state.current_stage()
+    out.write(_CLEAR)
+    out.write("  ccpkg install - select features        "
+              "[stage %d/%d: %s]\r\n\r\n"
+              % (state.stage_index + 1, len(state.stages), stage.name))
+    out.write("   Space toggle - up/down move - Enter next - a all - n none - Esc back\r\n\r\n")
+    for i, e in enumerate(stage.entries):
+        pointer = ">" if i == state.cursor else " "
+        mark = "x" if state.is_selected(e.id) else " "
+        out.write(" %s [%s] %-22s %s\r\n" % (pointer, mark, e.id, e.desc))
+    out.write("\r\n   [ Esc Back ]              [ Enter Continue -> ]\r\n")
+    out.flush()
+
+
+def _read_key(in_stream):
+    # type: (object) -> str
+    ch = in_stream.read(1)
+    if ch == "\x1b":
+        # try to read a 2-char CSI sequence (arrows); non-blocking-ish best effort
+        rest = in_stream.read(2)
+        return _decode_key(ch + rest) if rest else _decode_key(ch)
+    return _decode_key(ch)
+
+
 def _raw_mode_loop(stages, preselected, in_stream, out_stream):
     # type: (List[Stage], Set[str], object, object) -> Set[str]
-    # Replaced with the termios renderer in Task 8.
-    return _numbered_fallback(stages, preselected, in_stream, out_stream)
+    import termios
+    import tty
+    state = WizardState(stages, preselected)
+    fd = in_stream.fileno()
+    old = termios.tcgetattr(fd)
+    out_stream.write(_HIDE_CURSOR)
+    try:
+        tty.setraw(fd)
+        while not state.is_done():
+            _render_raw(state, out_stream)
+            key = _read_key(in_stream)
+            if key == "ctrl-c":
+                raise KeyboardInterrupt
+            elif key == "up":
+                state.move(-1)
+            elif key == "down":
+                state.move(1)
+            elif key == "space":
+                state.toggle()
+            elif key == "a":
+                state.select_all()
+            elif key == "n":
+                state.select_none()
+            elif key == "enter":
+                state.next_stage()
+            elif key in ("esc", "left"):
+                state.prev_stage()
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        out_stream.write(_SHOW_CURSOR)
+        out_stream.flush()
+    return state.selected_ids()

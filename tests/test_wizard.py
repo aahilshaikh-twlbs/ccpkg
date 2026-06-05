@@ -98,3 +98,15 @@ def test_run_wizard_uses_fallback_when_not_tty():
     result = wizard.run_wizard(stages, {"settings.json"},
                                in_stream=instream, out_stream=outstream)
     assert "settings.json" in result
+
+
+def test_decode_key_arrows_and_chars():
+    assert wizard._decode_key("\x1b[A") == "up"
+    assert wizard._decode_key("\x1b[B") == "down"
+    assert wizard._decode_key("\x1b[D") == "left"
+    assert wizard._decode_key("\r") == "enter"
+    assert wizard._decode_key("\n") == "enter"
+    assert wizard._decode_key(" ") == "space"
+    assert wizard._decode_key("\x1b") == "esc"
+    assert wizard._decode_key("a") == "a"
+    assert wizard._decode_key("\x03") == "ctrl-c"
