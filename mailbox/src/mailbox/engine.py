@@ -305,12 +305,15 @@ class MailboxEngine:
     # ----- release -----
     def release(self, session_id, selector, force=False):
         released = []
-        if selector == "all":
+        if selector in ("all", "auto"):
             for c in self.claims.values():
-                if c.session_id == session_id and not c.released:
-                    c.released = True
-                    self._persist_claim(c)
-                    released.append(c.id)
+                if c.session_id != session_id or c.released:
+                    continue
+                if selector == "auto" and c.kind != "auto":
+                    continue
+                c.released = True
+                self._persist_claim(c)
+                released.append(c.id)
             return {"released": released}
         target = self.claims.get(selector)
         if target is not None:
