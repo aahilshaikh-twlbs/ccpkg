@@ -98,32 +98,40 @@ claims release when that turn ends. Explicit claims and presence are untouched.
 
 ### Components
 
-1. **`engine.release_auto(session_id)`** (new method, `engine.py`):
+1. **`engine.release` gains an `"auto"` selector** (`engine.py`). The engine
+   already has `release(session_id, selector, force=False)` handling
+   `selector == "all"` and claim-id selectors, already wired through
+   `protocol.OPS`, the daemon dispatch, and the CLI. Rather than add a new op, we
+   extend the existing `selector == "all"` branch to also accept `"auto"`,
+   releasing only `kind == "auto"` claims:
 
    ```python
-   def release_auto(self, session_id):
+   if selector in ("all", "auto"):
        for c in self.claims.values():
-           if (c.session_id == session_id and c.kind == "auto"
-                   and not c.released):
-               c.released = True
-               self._persist_claim(c)
-       return {"ok": True}
+           if c.session_id != session_id or c.released:
+               continue
+           if selector == "auto" and c.kind != "auto":
+               continue
+           c.released = True
+           self._persist_claim(c)
+           released.append(c.id)
+       return {"released": released}
    ```
 
-   - Releases only `kind == "auto"` claims; leaves `explicit` claims held
-     (deliberate holds must survive a turn boundary).
-   - Does **not** touch `Presence` — the session stays `active`; it has merely
-     finished a turn, not departed. (Contrast `leave()`, which goes offline and
-     drops everything.)
+   - Releases only `auto` claims; leaves `explicit` claims held (deliberate holds
+     must survive a turn boundary).
+   - `release` already does **not** touch `Presence` — the session stays
+     `active`; it has merely finished a turn, not departed. (Contrast `leave()`,
+     which goes offline and drops everything.)
+   - **No protocol/CLI/dispatch changes** — `release` is already in `OPS`, the
+     generic `getattr(engine, op)(**args)` dispatch, and the CLI. This is the
+     DRYer choice discovered during planning (the original spec proposed a
+     separate `release_auto` op; behavior and acceptance are identical).
 
-2. **Protocol + dispatch.** Register the `release_auto` action in
-   `mailbox/src/mailbox/protocol.py` and route it to `engine.release_auto` in the
-   server/daemon dispatch (mirroring how `leave` / `heartbeat` are wired).
-
-3. **`Stop` hook** (`mailbox/hooks/stop.py`, new): reads `session_id` from stdin
-   JSON, calls `client.request("release_auto", {"session_id": sid})`. Fail-open
-   ALWAYS (any error → exit 0), matching the other hooks' contract and the
-   `sys.path`-bootstrap preamble used by `session_end.py`.
+2. **`Stop` hook** (`mailbox/hooks/stop.py`, new): reads `session_id` from stdin
+   JSON, calls `client.request("release", {"session_id": sid, "selector": "auto"})`.
+   Fail-open ALWAYS (any error → exit 0), mirroring `session_end.py`'s structure
+   and `sys.path`-bootstrap preamble.
 
 4. **Heartbeat unchanged.** After a turn's auto-claims release, the heartbeat
    refresh loop simply finds nothing to refresh until the next edit creates a
@@ -161,15 +169,17 @@ UserPromptSubmit ─ heartbeat (nothing to refresh) ─► turn runs
 
 ### Testing (mailbox suite — stdlib + pytest via repo `.venv`)
 
-- `test_engine_claims.py`: `release_auto` releases `auto` claims, **keeps**
-  `explicit` claims, and **leaves presence `active`**.
-- `test_engine_checkwrite.py`: after session A `release_auto`, session B's
-  `check_write` on a file A previously held returns `allow` (was `deny`).
-- `test_protocol.py` / server test: the `release_auto` action round-trips through
-  protocol + dispatch to the engine method.
-- `test_hooks.py`: `stop.py` invoked with a valid `Stop` payload issues a
-  `release_auto` request; invoked with empty/malformed stdin exits 0 with no
-  request (fail-open).
+- `test_engine_claims.py`: `release(selector="auto")` releases `auto` claims,
+  **keeps** `explicit` claims, **leaves presence `active`**, and `selector="all"`
+  still releases everything (regression).
+- `test_engine_checkwrite.py`: after session A `release(selector="auto")`,
+  session B's `check_write` on a file A previously held returns `allow` (was
+  `deny`).
+- `test_hooks.py`: `stop.py` invoked with a valid `Stop` payload releases the
+  session's auto-claims while presence stays `active`; invoked with empty/
+  malformed stdin exits 0 (fail-open).
+- Install tests (`tests/test_mailbox_install.py`, `mailbox/tests/test_install.py`)
+  updated for the new `Stop` hook (six hooks, not five).
 - Regression: full mailbox suite stays green; `ccpkg` suite stays green.
 
 **Acceptance:** with the fixed vendored mailbox installed, two sessions editing
