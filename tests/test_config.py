@@ -37,3 +37,25 @@ def test_localenv_path_joins_local_env():
 
 def test_backup_suffix_value():
     assert config.backup_suffix() == ".ccpkg.bak"
+
+
+def test_repo_root_dev_fallback_when_no_env(monkeypatch):
+    monkeypatch.delenv("CCPKG_ROOT", raising=False)
+    root = config.repo_root()
+    # dev fallback: the dir two up from ccpkg/config.py contains manifest.json
+    assert os.path.isfile(os.path.join(root, "manifest.json"))
+    assert config.is_packaged() is False
+
+
+def test_repo_root_uses_ccpkg_root_when_set(monkeypatch, tmp_path):
+    monkeypatch.setenv("CCPKG_ROOT", str(tmp_path))
+    assert config.repo_root() == str(tmp_path)
+    assert config.is_packaged() is True
+
+
+def test_repo_root_ignores_nonexistent_ccpkg_root(monkeypatch, tmp_path):
+    bogus = os.path.join(str(tmp_path), "does-not-exist")
+    monkeypatch.setenv("CCPKG_ROOT", bogus)
+    # falls back to dev root; not treated as packaged
+    assert config.repo_root() != bogus
+    assert config.is_packaged() is False

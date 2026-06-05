@@ -1,11 +1,30 @@
 """ccpkg.config — repo/home path resolution (Contract §2). Stdlib-only."""
 
 import os
+from typing import Optional
+
+
+def packaged_root():
+    # type: () -> Optional[str]
+    """The packaged asset root from $CCPKG_ROOT, if it names a real dir; else None."""
+    root = os.environ.get("CCPKG_ROOT")
+    if root and os.path.isdir(root):
+        return root
+    return None
+
+
+def is_packaged():
+    # type: () -> bool
+    """True when running from a package install (CCPKG_ROOT points at a real dir)."""
+    return packaged_root() is not None
 
 
 def repo_root():
     # type: () -> str
-    """The repo dir: realpath(this file) -> up two (ccpkg/config.py -> ccpkg -> repo)."""
+    """Asset root: $CCPKG_ROOT when packaged, else two-up from this file (dev checkout)."""
+    pkg = packaged_root()
+    if pkg:
+        return pkg
     return os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 
 
