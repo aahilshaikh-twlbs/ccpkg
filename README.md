@@ -178,3 +178,17 @@ A plain git checkout running `python3 -m ccpkg` is unaffected: with `CCPKG_ROOT`
 assets resolve relative to the checkout and `local.env` falls back to `<repo>/local.env`,
 exactly as before. `make dist` builds the versioned tarball (`ccpkg --version`) that the
 package definitions consume.
+
+### Install with Homebrew
+
+The formula lives in this repo (`Formula/ccpkg.rb`), so it is tapped by URL:
+
+```sh
+brew tap aahilshaikh-twlbs/ccpkg https://github.com/aahilshaikh-twlbs/ccpkg
+brew install ccpkg
+ccpkg --version
+```
+
+This installs the bundled payload into Homebrew's `libexec` and a `ccpkg` wrapper that
+sets `CCPKG_ROOT`. `ccpkg push` is disabled in a Homebrew install (it needs a git
+checkout). See [RELEASING.md](./RELEASING.md) for cutting new versions.

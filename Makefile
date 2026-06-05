@@ -1,4 +1,4 @@
-.PHONY: help hooks dist
+.PHONY: help hooks dist formula-sha
 
 help:
 	@echo "claude-setup make targets:"
@@ -20,3 +20,9 @@ dist:
 	@rm -rf dist/ccpkg-$(VERSION)
 	@shasum -a 256 $(DIST)
 	@echo "dist: wrote $(DIST)"
+
+# Compute the sha256 of the GitHub tag archive for Formula/ccpkg.rb.
+# Usage: make formula-sha VERSION=0.1.0   (defaults to ccpkg.__version__)
+formula-sha:
+	@curl -fsSL "https://github.com/aahilshaikh-twlbs/ccpkg/archive/refs/tags/v$(VERSION).tar.gz" \
+		| shasum -a 256 | awk '{print $$1}'
