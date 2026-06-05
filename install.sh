@@ -25,7 +25,7 @@ fi
 
 # --- detect OS via ccpkg.osenv (single source of truth; read-only) ---
 OS_NAME="$(python3 -c 'import ccpkg.osenv as o; print(o.detect_os())')"
-CMD="python3 -m ccpkg install"
+CMD="python3 -m ccpkg install --non-interactive"
 echo "install.sh: repo root: $REPO_ROOT"
 echo "install.sh: detected os: $OS_NAME"
 
@@ -56,4 +56,4 @@ if [ -n "$DEPS_REPORT" ]; then
 fi
 
 # --- hand off to the Python installer ---
-exec python3 -m ccpkg install
+exec python3 -m ccpkg install --non-interactive
