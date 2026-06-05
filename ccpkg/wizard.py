@@ -81,3 +81,67 @@ class WizardState:
         if self.stage_index > 0:
             self.stage_index -= 1
             self.cursor = 0
+
+
+import sys
+
+
+def _render_numbered(state, out):
+    # type: (WizardState, object) -> None
+    stage = state.current_stage()
+    out.write("\nStage %d/%d - %s\n"
+              % (state.stage_index + 1, len(state.stages), stage.name))
+    for i, e in enumerate(stage.entries, 1):
+        mark = "x" if state.is_selected(e.id) else " "
+        out.write("  %d. [%s] %-22s %s\n" % (i, mark, e.id, e.desc))
+    out.write("Toggle # / 'a' all / 'n' none / Enter=continue: ")
+    out.flush()
+
+
+def _numbered_fallback(stages, preselected, in_stream, out_stream):
+    # type: (List[Stage], Set[str], object, object) -> Set[str]
+    state = WizardState(stages, preselected)
+    while not state.is_done():
+        _render_numbered(state, out_stream)
+        line = in_stream.readline()
+        if line == "":                         # EOF -> accept rest as-is
+            break
+        cmd = line.strip().lower()
+        if cmd == "":
+            state.next_stage()
+        elif cmd == "a":
+            state.select_all()
+        elif cmd == "n":
+            state.select_none()
+        elif cmd.isdigit():
+            idx = int(cmd) - 1
+            if 0 <= idx < len(state.current_stage().entries):
+                state.cursor = idx
+                state.toggle()
+        # unknown input: ignore, re-render
+    return state.selected_ids()
+
+
+def run_wizard(stages, preselected, in_stream=None, out_stream=None):
+    # type: (List[Stage], Set[str], object, object) -> Set[str]
+    """Collect a selection. Raw-mode TUI when both streams are a TTY; otherwise
+    the numbered fallback."""
+    in_stream = in_stream if in_stream is not None else sys.stdin
+    out_stream = out_stream if out_stream is not None else sys.stdout
+    if _is_tty(in_stream) and _is_tty(out_stream):
+        return _raw_mode_loop(stages, preselected, in_stream, out_stream)
+    return _numbered_fallback(stages, preselected, in_stream, out_stream)
+
+
+def _is_tty(stream):
+    # type: (object) -> bool
+    try:
+        return bool(stream.isatty())
+    except Exception:
+        return False
+
+
+def _raw_mode_loop(stages, preselected, in_stream, out_stream):
+    # type: (List[Stage], Set[str], object, object) -> Set[str]
+    # Replaced with the termios renderer in Task 8.
+    return _numbered_fallback(stages, preselected, in_stream, out_stream)

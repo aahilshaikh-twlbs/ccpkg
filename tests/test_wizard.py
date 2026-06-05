@@ -1,3 +1,5 @@
+import io
+
 from ccpkg import wizard
 from ccpkg.selection import Stage, Entry
 
@@ -68,3 +70,31 @@ def test_selected_ids_returns_full_set():
     assert st.is_selected("superpowers") is True or st.is_selected("superpowers") is False
     ids = st.selected_ids()
     assert "settings.json" in ids
+
+
+def test_numbered_fallback_toggles_and_advances():
+    # Stage 1: toggle entry 2 on (statusline), then Enter; Stage 2: 'n' then Enter.
+    stages = _stages()
+    instream = io.StringIO("2\n\nn\n\n")
+    outstream = io.StringIO()
+    result = wizard._numbered_fallback(stages, {"settings.json", "superpowers"},
+                                       instream, outstream)
+    assert "settings.json" in result          # carried from preselected
+    assert "statusline.sh" in result          # toggled on in stage 1
+    assert "superpowers" not in result        # 'n' cleared stage 2
+
+
+def test_numbered_fallback_a_selects_all_in_stage():
+    stages = _stages()
+    instream = io.StringIO("a\n\n\n")          # stage1 all, enter; stage2 enter
+    result = wizard._numbered_fallback(stages, set(), instream, io.StringIO())
+    assert "settings.json" in result and "statusline.sh" in result
+
+
+def test_run_wizard_uses_fallback_when_not_tty():
+    stages = _stages()
+    instream = io.StringIO("\n\n")             # accept defaults each stage
+    outstream = io.StringIO()                  # StringIO.isatty() is False
+    result = wizard.run_wizard(stages, {"settings.json"},
+                               in_stream=instream, out_stream=outstream)
+    assert "settings.json" in result
