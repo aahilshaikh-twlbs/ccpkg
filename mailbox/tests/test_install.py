@@ -122,7 +122,7 @@ def test_install_idempotent_preserves_notify_hook(install_mod, fake_repo):
         assert len(mailbox_cmds) == 1, (
             "event " + event + " mailbox cmds: " + repr(mailbox_cmds)
         )
-        assert mailbox_cmds[0] == "python3 " + os.path.join(home, "hooks", filename)
+        assert mailbox_cmds[0] == 'python3 "$HOME/.claude/mailbox/hooks/' + filename + '"'
 
     # PreToolUse mailbox group carries the write-tool matcher.
     pre_group = [
