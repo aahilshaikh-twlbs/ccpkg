@@ -19,6 +19,7 @@ def fake_repo(tmp_path):
         "post_tool_use.py",
         "user_prompt_submit.py",
         "session_end.py",
+        "stop.py",
     ):
         (repo / "hooks" / name).write_text("# hook\n")
     # Copy the real install.py into the fake repo so repo_root resolves there.
@@ -101,7 +102,7 @@ def test_install_idempotent_preserves_notify_hook(install_mod, fake_repo):
     hooks = settings["hooks"]
 
     # All five events wired.
-    for event in ("SessionStart", "PreToolUse", "PostToolUse", "UserPromptSubmit", "SessionEnd"):
+    for event in ("SessionStart", "PreToolUse", "PostToolUse", "UserPromptSubmit", "SessionEnd", "Stop"):
         assert event in hooks, "missing event: " + event
 
     # The pre-existing notify hook is preserved on PostToolUse.
@@ -115,6 +116,7 @@ def test_install_idempotent_preserves_notify_hook(install_mod, fake_repo):
         "PostToolUse": "post_tool_use.py",
         "UserPromptSubmit": "user_prompt_submit.py",
         "SessionEnd": "session_end.py",
+        "Stop": "stop.py",
     }
     for event, filename in expected.items():
         cmds = _all_commands(hooks[event])
@@ -122,7 +124,7 @@ def test_install_idempotent_preserves_notify_hook(install_mod, fake_repo):
         assert len(mailbox_cmds) == 1, (
             "event " + event + " mailbox cmds: " + repr(mailbox_cmds)
         )
-        assert mailbox_cmds[0] == "python3 " + os.path.join(home, "hooks", filename)
+        assert mailbox_cmds[0] == 'python3 "$HOME/.claude/mailbox/hooks/' + filename + '"'
 
     # PreToolUse mailbox group carries the write-tool matcher.
     pre_group = [

@@ -287,3 +287,40 @@ def test_list_claims_annotates_offline(engine, clock):
     entry = [c for c in result if c["id"] == c1["id"]][0]
     assert entry["live"] is False
     assert entry["holder_status"] == "offline"
+
+
+def test_release_auto_releases_only_auto_claims(engine, clock):
+    clock.t = 1000.0
+    _join(engine, "s1", "alice", "/repo")
+    auto = engine.claim("s1", ["/repo/a.py"], kind="auto")
+    explicit = engine.claim("s1", ["/repo/b/**"], note="hold", kind="explicit")
+
+    result = engine.release("s1", "auto")
+
+    assert result["released"] == [auto["id"]]
+    assert engine.claims[auto["id"]].released is True
+    # explicit claim survives the turn boundary
+    assert engine.claims[explicit["id"]].released is False
+
+
+def test_release_auto_keeps_presence_active(engine, clock):
+    clock.t = 1000.0
+    _join(engine, "s1", "alice", "/repo")
+    engine.claim("s1", ["/repo/a.py"], kind="auto")
+
+    engine.release("s1", "auto")
+
+    assert engine.presence["s1"].status == "active"
+
+
+def test_release_all_still_releases_every_claim(engine, clock):
+    clock.t = 1000.0
+    _join(engine, "s1", "alice", "/repo")
+    c1 = engine.claim("s1", ["/repo/a.py"], kind="auto")
+    c2 = engine.claim("s1", ["/repo/b/**"], kind="explicit")
+
+    result = engine.release("s1", "all")
+
+    assert set(result["released"]) == {c1["id"], c2["id"]}
+    assert engine.claims[c1["id"]].released is True
+    assert engine.claims[c2["id"]].released is True

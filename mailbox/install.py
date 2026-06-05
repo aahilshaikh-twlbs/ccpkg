@@ -29,6 +29,7 @@ HOOK_SPECS = [
     ("PostToolUse", "*", "post_tool_use.py"),
     ("UserPromptSubmit", None, "user_prompt_submit.py"),
     ("SessionEnd", None, "session_end.py"),
+    ("Stop", None, "stop.py"),
 ]
 
 
