@@ -1,0 +1,28 @@
+"""Declarative non-file installables (plugins + mailbox) for the install wizard.
+
+Stdlib only, Python 3.9. These carry the same presentation shape as manifest
+Items (group/desc/default) plus an `id` and a `kind` so the installer knows how
+to act on a selected entry.
+"""
+from dataclasses import dataclass
+
+
+@dataclass
+class Selectable:
+    id: str
+    kind: str          # "plugin" | "mailbox"
+    group: str
+    desc: str
+    default: bool = True
+
+
+SELECTABLES = [
+    Selectable(id="superpowers", kind="plugin", group="Plugins",
+               desc="skills: brainstorming, TDD, debugging", default=True),
+    Selectable(id="frontend-design", kind="plugin", group="Plugins",
+               desc="distinctive frontend UI generation", default=True),
+    Selectable(id="understand-anything", kind="plugin", group="Plugins",
+               desc="codebase knowledge graphs", default=True),
+    Selectable(id="mailbox", kind="mailbox", group="Coordination",
+               desc="cross-session file-claim coordinator", default=True),
+]
