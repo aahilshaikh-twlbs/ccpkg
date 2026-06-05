@@ -6,9 +6,6 @@ ID convention: a manifest item's id is its `path`; a selectable's id is its `id`
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Set
 
-from . import manifest as manifest_mod
-from . import selectables as selectables_mod
-
 # Stage display order. A group not listed here sorts last, alphabetically.
 STAGE_ORDER = ["Core", "Commands", "Skills", "Plugins", "Coordination", "Overlay"]
 
@@ -69,25 +66,34 @@ def default_ids(items, sels, overlay_present):
 def resolve_selection(items, sels, overlay_present, profile_obj, is_tty,
                       reconfigure, run_wizard):
     # type: (List, List, bool, object, bool, bool, Optional[Callable]) -> Set[str]
-    """Precedence ladder -> the set of selected ids.
+    """Precedence ladder -> the set of selected ids. Four branches, in order:
 
-    --reconfigure : run wizard (pre-ticked from profile.selected if any, else defaults)
-    profile present: use profile.selected verbatim
-    is_tty         : run wizard (pre-ticked from defaults)
-    else           : default:true entries
+    1. --reconfigure on a TTY (with a wizard): run the wizard, pre-ticked from
+       the profile MERGED with current defaults when a profile exists, else from
+       defaults. (--yes sets is_tty False, so it skips this and replays headless.)
+    2. profile present: replay it — the saved `selected`, UNION any default-on
+       feature the profile never recorded (`defaults` minus the explicitly
+       `deselected`). This keeps newly-added default-on features from being
+       silently suppressed by an older profile.
+    3. TTY (with a wizard) and no profile: run the wizard, pre-ticked from defaults.
+    4. else (headless first run): the default:true entries.
     """
     defaults = default_ids(items, sels, overlay_present)
     stages = build_stages(items, sels, overlay_present)
 
-    if reconfigure and run_wizard is not None:
+    def _replay(prof):
+        # type: (object) -> Set[str]
+        return set(prof.selected) | (defaults - set(prof.deselected))
+
+    if reconfigure and is_tty and run_wizard is not None:
         if profile_obj is not None:
-            preselected = set(profile_obj.selected)
+            preselected = _replay(profile_obj)
         else:
             preselected = set(defaults)
         return set(run_wizard(stages, preselected))
 
     if profile_obj is not None:
-        return set(profile_obj.selected)
+        return _replay(profile_obj)
 
     if is_tty and run_wizard is not None:
         return set(run_wizard(stages, set(defaults)))

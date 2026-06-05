@@ -36,11 +36,63 @@ def test_default_ids_are_default_true_entries():
 
 
 def test_resolve_uses_profile_when_present_and_not_reconfigure():
+    # Profile replay MERGES current defaults: selected items, plus any default-on
+    # feature not explicitly deselected. An explicitly deselected item stays out.
     prof = profile.Profile(selected=["settings.json"], deselected=["skills/shannon"])
     ids = selection.resolve_selection(
         _items(), selectables.SELECTABLES, overlay_present=False,
         profile_obj=prof, is_tty=True, reconfigure=False, run_wizard=None)
-    assert ids == {"settings.json"}
+    assert "settings.json" in ids               # explicitly selected
+    assert "skills/shannon" not in ids          # explicitly deselected stays out
+    assert "superpowers" in ids                 # new default-on surfaces
+
+
+def test_resolve_profile_replay_includes_new_default_on_feature():
+    # A feature default-on now but absent from the saved profile (not in selected,
+    # not in deselected) must surface on headless replay — not be silently dropped.
+    prof = profile.Profile(selected=["settings.json"], deselected=[])
+    ids = selection.resolve_selection(
+        _items(), selectables.SELECTABLES, overlay_present=False,
+        profile_obj=prof, is_tty=False, reconfigure=False, run_wizard=None)
+    assert "superpowers" in ids       # new default-on, never in the old profile
+    assert "skills/shannon" in ids    # also default-on
+
+
+def test_resolve_profile_replay_respects_deselected():
+    # An explicitly deselected default-on feature stays OUT on replay.
+    prof = profile.Profile(selected=["settings.json"], deselected=["superpowers"])
+    ids = selection.resolve_selection(
+        _items(), selectables.SELECTABLES, overlay_present=False,
+        profile_obj=prof, is_tty=False, reconfigure=False, run_wizard=None)
+    assert "settings.json" in ids
+    assert "superpowers" not in ids
+
+
+def test_resolve_reconfigure_without_tty_does_not_run_wizard():
+    # --yes forces is_tty False in the CLI; --reconfigure must not override it.
+    prof = profile.Profile(selected=["settings.json"], deselected=["skills/shannon"])
+    called = {"wizard": False}
+
+    def fake_wizard(stages, preselected):
+        called["wizard"] = True
+        return {"x"}
+
+    ids = selection.resolve_selection(
+        _items(), selectables.SELECTABLES, overlay_present=False,
+        profile_obj=prof, is_tty=False, reconfigure=True, run_wizard=fake_wizard)
+    assert called["wizard"] is False
+    assert "settings.json" in ids
+    assert "skills/shannon" not in ids
+
+
+def test_resolve_reconfigure_no_wizard_falls_through_to_profile():
+    # reconfigure + run_wizard=None cleanly falls through to the profile replay.
+    prof = profile.Profile(selected=["settings.json"], deselected=[])
+    ids = selection.resolve_selection(
+        _items(), selectables.SELECTABLES, overlay_present=False,
+        profile_obj=prof, is_tty=True, reconfigure=True, run_wizard=None)
+    assert "settings.json" in ids
+    assert "superpowers" in ids
 
 
 def test_resolve_falls_back_to_defaults_when_no_profile_no_tty():
@@ -69,8 +121,10 @@ def test_resolve_reconfigure_runs_wizard_even_with_profile():
     prof = profile.Profile(selected=["settings.json"], deselected=[])
 
     def fake_wizard(stages, preselected):
-        # pre-ticked from the existing profile's selected set
-        assert preselected == {"settings.json"}
+        # pre-ticked from profile.selected MERGED with current defaults, so a new
+        # default-on feature shows ticked.
+        assert "settings.json" in preselected
+        assert "superpowers" in preselected
         return {"settings.json", "skills/shannon"}
 
     ids = selection.resolve_selection(
