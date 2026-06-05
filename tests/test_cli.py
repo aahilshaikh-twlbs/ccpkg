@@ -319,6 +319,17 @@ def test_install_ctrl_c_during_wizard_cancels(tmp_repo, tmp_home, monkeypatch, c
     assert "cancelled" in capsys.readouterr().out.lower()
 
 
+def test_version_flag_prints_version(capsys):
+    from ccpkg import cli, __version__
+    import pytest
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["--version"])
+    assert exc.value.code == 0
+    out = capsys.readouterr().out
+    assert __version__ in out
+    assert out.startswith("ccpkg ")
+
+
 def test_dunder_main_calls_sys_exit(tmp_repo, tmp_home, monkeypatch):
     # python3 -m ccpkg with no args -> nonzero exit via sys.exit(main()).
     env = dict(os.environ)

@@ -18,6 +18,7 @@ from . import osenv
 from . import plugins
 from . import push
 from . import scan
+from . import __version__
 
 
 def _resolve(argv_root=None):
@@ -202,6 +203,9 @@ def _cmd_status(root, home, env, os_name):
 
 def _build_parser():
     parser = argparse.ArgumentParser(prog="ccpkg")
+    parser.add_argument(
+        "--version", action="version", version="ccpkg " + __version__
+    )
     sub = parser.add_subparsers(dest="cmd")
     p_install = sub.add_parser("install")
     p_install.add_argument("--yes", "--non-interactive", dest="yes",
