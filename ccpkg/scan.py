@@ -101,9 +101,11 @@ def scan_paths(paths, layer, terms, check_home_paths=True):
 
 
 # Directories never swept by the repo-wide scan: VCS metadata, virtualenvs,
-# caches, the gitignored private overlay, and the local-only purity-terms config.
+# caches, the gitignored private overlay, the local-only purity-terms config,
+# and the gitignored session handoffs (local paths / personal context).
 _SCAN_EXCLUDE_DIRS = frozenset([
     ".git", ".venv", ".pytest_cache", "__pycache__", "private", ".ccpkg",
+    "handoffs",
 ])
 
 
