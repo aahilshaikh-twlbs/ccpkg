@@ -13,6 +13,10 @@ class Item:
     mode: str
     os: str = "any"
     layer: str = "base"
+    group: str = "Core"
+    desc: str = ""
+    default: bool = True
+    required: bool = False
 
 
 def _build_item(entry, index):
@@ -44,7 +48,21 @@ def _build_item(entry, index):
             % (index, path, layer, VALID_LAYERS)
         )
 
-    return Item(path=path, mode=mode, os=os_name, layer=layer)
+    group = entry.get("group", "Core")
+    if not isinstance(group, str) or not group:
+        group = "Core"
+    desc = entry.get("desc", "")
+    if not isinstance(desc, str):
+        desc = ""
+    default = entry.get("default", True)
+    if not isinstance(default, bool):
+        default = True
+    required = entry.get("required", False)
+    if not isinstance(required, bool):
+        required = False
+
+    return Item(path=path, mode=mode, os=os_name, layer=layer,
+                group=group, desc=desc, default=default, required=required)
 
 
 def parse(path: str) -> List[Item]:
