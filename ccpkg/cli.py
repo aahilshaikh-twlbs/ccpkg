@@ -109,8 +109,34 @@ def _print_results(results):
         print("{0}\t{1}".format(path_rel, result))
 
 
-def _cmd_install(root, home, env, os_name):
-    report = installer.install(root, home, env, os_name)
+def _cmd_install(root, home, env, os_name, yes=False, reconfigure=False):
+    from . import manifest, selectables, selection, profile, wizard
+    import sys
+
+    items = manifest.parse(config.manifest_path(root))
+    overlay_present = bool(
+        env.get("OVERLAY_DIR") or env.get("OVERLAY_REPO")
+    )
+    prof = profile.load(home)
+    is_tty = (not yes) and _stdin_is_tty()
+
+    def _run_wizard(stages, preselected):
+        return wizard.run_wizard(stages, preselected)
+
+    selected = selection.resolve_selection(
+        items, selectables.SELECTABLES, overlay_present,
+        profile_obj=prof, is_tty=is_tty, reconfigure=reconfigure,
+        run_wizard=_run_wizard,
+    )
+
+    # Persist the resolved selection (split into selected/deselected for clarity).
+    all_ids = selection.default_ids(items, selectables.SELECTABLES, overlay_present) \
+        | set(selected)
+    deselected = sorted(all_ids - set(selected))
+    profile.save(home, profile.Profile(selected=sorted(selected),
+                                        deselected=deselected))
+
+    report = installer.install(root, home, env, os_name, selected=set(selected))
     print("os: {0}".format(report.os))
     for pkg, status in report.deps.items():
         print("dep {0}\t{1}".format(pkg, status))
@@ -124,6 +150,14 @@ def _cmd_install(root, home, env, os_name):
     for note in report.notes:
         print("note: {0}".format(note))
     return 0
+
+
+def _stdin_is_tty():
+    import sys
+    try:
+        return bool(sys.stdin.isatty())
+    except Exception:
+        return False
 
 
 def _cmd_pull(root, home, env, os_name):
@@ -162,7 +196,13 @@ def _cmd_status(root, home, env, os_name):
 def _build_parser():
     parser = argparse.ArgumentParser(prog="ccpkg")
     sub = parser.add_subparsers(dest="cmd")
-    sub.add_parser("install")
+    p_install = sub.add_parser("install")
+    p_install.add_argument("--yes", "--non-interactive", dest="yes",
+                           action="store_true",
+                           help="headless: apply profile or defaults, no prompts")
+    p_install.add_argument("--reconfigure", dest="reconfigure",
+                           action="store_true",
+                           help="re-run the interactive wizard even if a profile exists")
     sub.add_parser("pull")
     p_push = sub.add_parser("push")
     p_push.add_argument("paths", nargs="*")
@@ -180,7 +220,9 @@ def main(argv=None):
         return 2
     root, home, env, os_name = _resolve()
     if args.cmd == "install":
-        return _cmd_install(root, home, env, os_name)
+        return _cmd_install(root, home, env, os_name,
+                            yes=getattr(args, "yes", False),
+                            reconfigure=getattr(args, "reconfigure", False))
     if args.cmd == "pull":
         return _cmd_pull(root, home, env, os_name)
     if args.cmd == "push":

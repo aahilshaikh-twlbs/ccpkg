@@ -125,7 +125,8 @@ def test_main_install_invokes_installer_and_prints_report(tmp_repo, tmp_home, mo
     _patch_resolution(monkeypatch, tmp_repo, tmp_home)
     captured = {}
 
-    def _fake_install(root, home_target, env, os_name, run=subprocess.run, interactive=False):
+    def _fake_install(root, home_target, env, os_name, run=subprocess.run,
+                      interactive=False, selected=None):
         captured["root"] = root
         captured["home_target"] = home_target
         captured["os_name"] = os_name
@@ -216,6 +217,30 @@ def test_main_no_subcommand_prints_help_nonzero(tmp_repo, tmp_home, monkeypatch,
     assert rc != 0
     out = capsys.readouterr().out
     assert "usage" in out.lower()
+
+
+def test_install_parser_accepts_new_flags():
+    from ccpkg import cli
+    parser = cli._build_parser()
+    args = parser.parse_args(["install", "--yes"])
+    assert args.yes is True
+    args = parser.parse_args(["install", "--reconfigure"])
+    assert args.reconfigure is True
+    args = parser.parse_args(["install", "--non-interactive"])
+    assert args.yes is True            # --non-interactive aliases --yes
+
+
+def test_install_yes_writes_profile_and_is_headless(tmp_repo, tmp_home, monkeypatch):
+    from ccpkg import cli, profile
+    monkeypatch.setattr(cli.config, "repo_root", lambda: tmp_repo)
+    monkeypatch.setattr(cli.config, "home_target", lambda: tmp_home)
+    # force non-interactive
+    rc = cli.main(["install", "--yes"])
+    assert rc == 0
+    # --yes with no prior profile applies defaults and persists them
+    prof = profile.load(tmp_home)
+    assert prof is not None
+    assert "settings.json" in prof.selected
 
 
 def test_dunder_main_calls_sys_exit(tmp_repo, tmp_home, monkeypatch):
