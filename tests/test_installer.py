@@ -213,3 +213,43 @@ def test_install_none_selection_applies_all(tmp_repo, tmp_home):
         run=_fake_run(), selected=None)
     applied = {p for p, _ in report.base_applied}
     assert "statusline.sh" in applied   # unchanged full behavior
+
+
+def test_install_skips_ensure_deps_when_packaged(tmp_repo, tmp_home, monkeypatch):
+    from ccpkg import installer, config
+    monkeypatch.setenv("CCPKG_ROOT", tmp_repo)  # packaged
+    calls = []
+
+    def run(cmd, **kwargs):
+        calls.append(cmd)
+        class R:
+            returncode = 0
+            stdout = ""
+        return R()
+
+    report = installer.install(tmp_repo, tmp_home, env={}, os_name="darwin", run=run)
+    assert report.deps == {"git": "declared", "python3": "declared", "jq": "declared"}
+    # no brew/apt invocation happened for dep install
+    assert not any(("brew" in c or "apt" in c or "apt-get" in c)
+                   for c in (" ".join(x) for x in calls))
+
+
+def test_install_runs_ensure_deps_when_not_packaged(tmp_repo, tmp_home, monkeypatch):
+    from ccpkg import installer, config
+    monkeypatch.delenv("CCPKG_ROOT", raising=False)
+    seen = {"called": False}
+
+    def fake_ensure(os_name, pkgs, run=None):
+        seen["called"] = True
+        return {p: "present" for p in pkgs}
+
+    monkeypatch.setattr(installer.osenv, "ensure_deps", fake_ensure)
+
+    def run(cmd, **kwargs):
+        class R:
+            returncode = 0
+            stdout = ""
+        return R()
+
+    installer.install(tmp_repo, tmp_home, env={}, os_name="darwin", run=run)
+    assert seen["called"] is True

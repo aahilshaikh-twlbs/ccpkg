@@ -22,6 +22,8 @@ __pycache__/
 # ccpkg backups + caches
 *.ccpkg.bak
 .ccpkg/cache/
+# build output
+dist/
 # local-only purity denylist (real company/person/product terms — never commit)
 .ccpkg/purity-terms.txt
 # private overlay (design docs + personal/company content — never commit)

@@ -151,6 +151,8 @@ def test_main_install_invokes_installer_and_prints_report(tmp_repo, tmp_home, mo
 def test_main_push_invokes_push_and_prints_summary(tmp_repo, tmp_home, monkeypatch, capsys):
     _seed_localenv(tmp_repo, tmp_home)
     _patch_resolution(monkeypatch, tmp_repo, tmp_home)
+    monkeypatch.delenv("CCPKG_ROOT", raising=False)
+    os.makedirs(os.path.join(tmp_repo, ".git"), exist_ok=True)  # looks like a checkout
     captured = {}
 
     def _fake_push(root, home_target, env, paths, confirm=None, os_name="darwin"):
@@ -166,6 +168,27 @@ def test_main_push_invokes_push_and_prints_summary(tmp_repo, tmp_home, monkeypat
     out = capsys.readouterr().out
     assert "written" in out
     assert "settings.json" in out
+
+
+def test_push_blocked_when_packaged(monkeypatch, tmp_path, capsys):
+    from ccpkg import cli, config
+    monkeypatch.setattr(config, "repo_root", lambda: str(tmp_path))
+    monkeypatch.setattr(config, "home_target", lambda: str(tmp_path))
+    monkeypatch.setenv("CCPKG_ROOT", str(tmp_path))  # packaged, no .git
+    rc = cli.main(["push"])
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "git checkout" in err
+
+
+def test_push_blocked_when_no_git_checkout(monkeypatch, tmp_path, capsys):
+    from ccpkg import cli, config
+    monkeypatch.delenv("CCPKG_ROOT", raising=False)
+    monkeypatch.setattr(config, "repo_root", lambda: str(tmp_path))  # no .git dir
+    monkeypatch.setattr(config, "home_target", lambda: str(tmp_path))
+    rc = cli.main(["push"])
+    assert rc == 2
+    assert "git checkout" in capsys.readouterr().err
 
 
 def test_main_status_prints_drift(tmp_repo, tmp_home, monkeypatch, capsys):
@@ -317,6 +340,17 @@ def test_install_ctrl_c_during_wizard_cancels(tmp_repo, tmp_home, monkeypatch, c
     rc = cli.main(["install"])
     assert rc == 130
     assert "cancelled" in capsys.readouterr().out.lower()
+
+
+def test_version_flag_prints_version(capsys):
+    from ccpkg import cli, __version__
+    import pytest
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["--version"])
+    assert exc.value.code == 0
+    out = capsys.readouterr().out
+    assert __version__ in out
+    assert out.startswith("ccpkg ")
 
 
 def test_dunder_main_calls_sys_exit(tmp_repo, tmp_home, monkeypatch):

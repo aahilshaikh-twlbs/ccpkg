@@ -88,9 +88,13 @@ def install(root, home_target, env, os_name, run=subprocess.run,
     everything applies (legacy behavior). Never raises; sub-step failures -> notes."""
     report = InstallReport(os=os_name)
 
-    # 1. dependencies
+    # 1. dependencies — when packaged (CCPKG_ROOT set), git/python3/jq are declared
+    #    package deps; do not shell out to brew/apt at runtime.
     try:
-        report.deps = osenv.ensure_deps(os_name, ["git", "python3", "jq"], run=run)
+        if config.is_packaged():
+            report.deps = {pkg: "declared" for pkg in ("git", "python3", "jq")}
+        else:
+            report.deps = osenv.ensure_deps(os_name, ["git", "python3", "jq"], run=run)
     except Exception as exc:
         report.notes.append("deps: %s" % exc)
 

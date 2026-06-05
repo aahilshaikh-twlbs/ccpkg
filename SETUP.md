@@ -217,3 +217,18 @@ Expected output:
 ```
 overlay items: [('agents/sample-overlay-agent.md', 'overlay'), ('settings.local.json.tmpl', 'overlay')]
 ```
+
+## Optional: running from a package install
+
+These steps assume a git checkout. ccpkg can also run from a read-only package (Homebrew /
+apt — separate, later work). A packaged install exports `CCPKG_ROOT` (the bundled asset
+tree) and reads `local.env` from `~/.config/ccpkg/local.env` (or `$CCPKG_LOCAL_ENV`); it
+skips dependency installation (declared as package deps) and disables `ccpkg push` (use a
+checkout for the dev loop). To produce the package payload from a checkout:
+
+```bash
+make dist           # writes dist/ccpkg-<version>.tar.gz and prints its sha256
+ccpkg --version     # or: python3 -m ccpkg --version
+```
+
+See the "Running from a package (`CCPKG_ROOT`)" section in [README.md](./README.md).
