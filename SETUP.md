@@ -73,6 +73,24 @@ mailbox status, scan findings (should be empty), and notes. `ccpkg install` is i
 and never aborts on a sub-step failure — failures are collected into the notes section so
 you can read and address them.
 
+### Interactive feature picker
+
+Run in a terminal, `python3 -m ccpkg install` opens an interactive feature picker before
+applying anything. Features are grouped into staged screens (Core, Commands, Skills,
+Plugins, Coordination, and an Overlay stage when an overlay is configured). Navigate with
+the arrow keys, toggle an item with space, advance with Enter, and go back with Esc. The
+resulting selection is saved to `~/.claude/.ccpkg-profile.json` and replayed on later runs.
+
+```text
+ccpkg install              # feature picker (when run in a terminal)
+ccpkg install --yes        # headless: apply saved profile or defaults
+ccpkg install --reconfigure  # re-open the picker
+```
+
+`--yes` (alias `--non-interactive`) is headless: it applies the saved profile, or the
+defaults if none exists, with no prompts — this is what `./install.sh` uses. Use
+`--reconfigure` to re-open the picker even when a profile already exists.
+
 ## 3. Verify the base layer landed
 
 Confirm the live `~/.claude` matches the repo (no drift):
