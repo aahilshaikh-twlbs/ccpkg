@@ -28,3 +28,5 @@ dist/
 .ccpkg/purity-terms.txt
 # private overlay (design docs + personal/company content — never commit)
 private/
+# session handoff docs (contain local paths / personal context — never commit)
+handoffs/
