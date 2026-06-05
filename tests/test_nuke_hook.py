@@ -133,3 +133,13 @@ def test_session_end_does_not_inject(tmp_path):
         tmp_path,
     )
     assert proc.stdout.strip() == ""
+
+
+def test_command_file_carries_sentinel_and_description():
+    cmd = Path(__file__).resolve().parents[1] / "home" / ".claude" / "commands" / "nuke.md"
+    text = cmd.read_text()
+    # Frontmatter description so it shows in the command list.
+    assert text.startswith("---")
+    assert "description:" in text.split("---", 2)[1]
+    # The sentinel the hook arms on must be present in the expansion.
+    assert "<<NUKE-ARM>>" in text
