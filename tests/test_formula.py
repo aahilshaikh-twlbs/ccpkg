@@ -36,6 +36,17 @@ def test_formula_declares_expected_stanzas():
         assert '"%s"' % entry in text, "formula does not install %s" % entry
 
 
+def test_formula_ccpkg_root_uses_stable_opt_prefix():
+    # CCPKG_ROOT must resolve to the version-independent opt prefix, not the
+    # versioned Cellar keg. With #{libexec} (Cellar), every `brew upgrade` deletes
+    # the old keg and dangles every symlink ccpkg lays into ~/.claude until the
+    # user re-runs `ccpkg install`. #{opt_libexec} survives upgrades.
+    with open(FORMULA, "r", encoding="utf-8") as fh:
+        text = fh.read()
+    assert 'CCPKG_ROOT="#{opt_libexec}"' in text
+    assert 'CCPKG_ROOT="#{libexec}"' not in text
+
+
 def test_formula_ruby_syntax_valid():
     ruby = shutil.which("ruby")
     if ruby is None:

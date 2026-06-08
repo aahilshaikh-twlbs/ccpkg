@@ -12,8 +12,8 @@ class Ccpkg < Formula
     libexec.install "ccpkg", "manifest.json", "home", "mailbox", "install.sh", "LICENSE"
     (bin/"ccpkg").write <<~SH
       #!/bin/bash
-      export CCPKG_ROOT="#{libexec}"
-      export PYTHONPATH="#{libexec}${PYTHONPATH:+:$PYTHONPATH}"
+      export CCPKG_ROOT="#{opt_libexec}"
+      export PYTHONPATH="#{opt_libexec}${PYTHONPATH:+:$PYTHONPATH}"
       exec "#{Formula["python@3.12"].opt_bin}/python3.12" -m ccpkg "$@"
     SH
   end

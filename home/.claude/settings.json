@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 $HOME/.claude/hooks/nuke.py"
+            "command": "python3 \"$HOME/.claude/hooks/nuke.py\""
           }
         ]
       }

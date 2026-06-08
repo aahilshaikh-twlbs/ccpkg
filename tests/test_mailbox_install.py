@@ -159,6 +159,30 @@ def test_install_is_idempotent(tmp_home, tmp_path):
         assert len(matchers) == len(set(matchers))
 
 
+# ---- symlink repoint to the stable opt prefix ------------------------------
+
+def test_ensure_symlink_repoints_to_stable_path_when_literal_differs(tmp_path):
+    # Same Homebrew Cellar->opt concern as apply.apply_symlink: an existing link
+    # to the versioned keg must be repointed at the stable `opt` path even though
+    # both currently resolve to the same file, so `brew upgrade` can't dangle it.
+    keg = tmp_path / "Cellar" / "ccpkg" / "0.1.5"
+    keg.mkdir(parents=True)
+    src_file = keg / "mailbox"
+    src_file.write_text("#!/bin/sh\n")
+    opt = tmp_path / "opt" / "ccpkg"
+    opt.parent.mkdir(parents=True)
+    os.symlink(str(keg), str(opt))               # opt/ccpkg -> Cellar/ccpkg/0.1.5
+
+    target = str(tmp_path / "home" / "mailbox" / "mailbox")
+    os.makedirs(os.path.dirname(target))
+    os.symlink(str(src_file), target)            # existing link -> versioned Cellar path
+    stable_src = str(opt / "mailbox")
+
+    mailbox_install._ensure_symlink(stable_src, target)
+
+    assert os.readlink(target) == stable_src     # tracks the stable opt path now
+
+
 # ---- never raises ----------------------------------------------------------
 
 def test_install_missing_mailbox_does_not_raise(tmp_home, tmp_path):

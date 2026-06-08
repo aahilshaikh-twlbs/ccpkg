@@ -77,6 +77,29 @@ def test_apply_symlink_replaces_wrong_link(tmp_path):
     assert os.path.realpath(target) == os.path.realpath(src)
 
 
+def test_apply_symlink_repoints_to_stable_path_when_literal_differs(tmp_path):
+    # Homebrew case: an existing link points at the versioned Cellar keg while the
+    # new source is the stable `opt` prefix. Both resolve to the same file today,
+    # but the link must track `opt` so it survives the Cellar dir being swapped on
+    # `brew upgrade`. Idempotency keyed on realpath would wrongly skip the repoint.
+    keg = tmp_path / "Cellar" / "ccpkg" / "0.1.5"
+    keg.mkdir(parents=True)
+    src_file = keg / "x.sh"
+    src_file.write_text("body")
+    opt = tmp_path / "opt" / "ccpkg"
+    opt.parent.mkdir(parents=True)
+    os.symlink(str(keg), str(opt))               # opt/ccpkg -> Cellar/ccpkg/0.1.5
+
+    target = str(tmp_path / "link.sh")
+    os.symlink(str(src_file), target)            # existing link -> versioned Cellar path
+    stable_src = str(opt / "x.sh")               # opt/ccpkg/x.sh -> same underlying file
+
+    result = apply.apply_symlink(stable_src, target)
+
+    assert result == "linked"                    # repointed, not skipped as "ok"
+    assert os.readlink(target) == stable_src     # now tracks the stable opt path
+
+
 def test_apply_symlink_backs_up_real_file(tmp_path):
     src = str(tmp_path / "src.sh")
     with open(src, "w") as fh:

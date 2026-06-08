@@ -39,7 +39,11 @@ def apply_symlink(src_abs, target):
     if parent:
         os.makedirs(parent, exist_ok=True)
     if os.path.islink(target):
-        if os.path.realpath(target) == os.path.realpath(src_abs):
+        # Compare the LITERAL link target, not its realpath: a link pointing at a
+        # versioned Homebrew Cellar keg and one pointing at the stable `opt` prefix
+        # resolve identically today, but only the latter survives `brew upgrade`.
+        # Keying idempotency on realpath would skip repointing Cellar -> opt.
+        if os.readlink(target) == src_abs:
             return "ok"
         os.remove(target)
     elif os.path.exists(target):

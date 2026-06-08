@@ -45,7 +45,11 @@ def _ensure_symlink(src_abs, target):
     if parent and not os.path.isdir(parent):
         os.makedirs(parent)
     if os.path.islink(target):
-        if os.path.realpath(target) == os.path.realpath(src_abs):
+        # Compare the LITERAL link target, not realpath: a link to a versioned
+        # Cellar keg and one to the stable `opt` prefix resolve the same today, but
+        # only `opt` survives `brew upgrade`. realpath-equality would skip the
+        # Cellar -> opt repoint and leave the link to dangle on the next upgrade.
+        if os.readlink(target) == src_abs:
             return
         os.unlink(target)
     elif os.path.exists(target):
