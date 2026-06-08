@@ -45,6 +45,20 @@ def make_vendored_mailbox(root, with_installer=True):
     return mb
 
 
+# ---- hook command guards a transiently-missing file ------------------------
+
+def test_hook_command_guards_missing_file():
+    # A transiently-absent hook file (e.g. mid `brew upgrade`, before the symlink
+    # is repointed to the new keg) must be a silent no-op, not a non-zero exit that
+    # Claude Code surfaces as "SessionEnd hook failed" / "operation blocked by
+    # hook". Mirrors the notify-hook guard already in settings.json.
+    cmd = mailbox_install._hook_command("session_end.py")
+    path = '"$HOME/.claude/mailbox/hooks/session_end.py"'
+    assert cmd == "[ -f %s ] && python3 %s || true" % (path, path)
+    # still contains the marker the de-dupe logic keys on
+    assert "mailbox/hooks/" in cmd
+
+
 # ---- mailbox_src -----------------------------------------------------------
 
 def test_mailbox_src_joins_root(tmp_path):
@@ -107,7 +121,8 @@ def test_install_fallback_creates_symlinks_and_merges_hooks(tmp_home, tmp_path):
                 seen[(evt, grp.get("matcher"))] = hk["command"]
     for evt, (matcher, script) in HOOK_SCRIPTS.items():
         cmd = seen[(evt, matcher)]
-        assert cmd == 'python3 "$HOME/.claude/mailbox/hooks/%s"' % script
+        path = '"$HOME/.claude/mailbox/hooks/%s"' % script
+        assert cmd == "[ -f %s ] && python3 %s || true" % (path, path)
         assert "/Users/" not in cmd
         assert "/home/" not in cmd
 

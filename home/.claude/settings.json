@@ -21,7 +21,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$HOME/.claude/mailbox/hooks/user_prompt_submit.py\""
+            "command": "[ -f \"$HOME/.claude/mailbox/hooks/user_prompt_submit.py\" ] && python3 \"$HOME/.claude/mailbox/hooks/user_prompt_submit.py\" || true"
           }
         ]
       },
@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$HOME/.claude/hooks/nuke.py\""
+            "command": "[ -f \"$HOME/.claude/hooks/nuke.py\" ] && python3 \"$HOME/.claude/hooks/nuke.py\" || true"
           }
         ]
       }
@@ -47,7 +47,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$HOME/.claude/mailbox/hooks/stop.py\""
+            "command": "[ -f \"$HOME/.claude/mailbox/hooks/stop.py\" ] && python3 \"$HOME/.claude/mailbox/hooks/stop.py\" || true"
           }
         ]
       }
@@ -67,7 +67,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$HOME/.claude/mailbox/hooks/post_tool_use.py\""
+            "command": "[ -f \"$HOME/.claude/mailbox/hooks/post_tool_use.py\" ] && python3 \"$HOME/.claude/mailbox/hooks/post_tool_use.py\" || true"
           }
         ]
       }
@@ -99,7 +99,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$HOME/.claude/mailbox/hooks/session_start.py\""
+            "command": "[ -f \"$HOME/.claude/mailbox/hooks/session_start.py\" ] && python3 \"$HOME/.claude/mailbox/hooks/session_start.py\" || true"
           }
         ]
       }
@@ -110,7 +110,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$HOME/.claude/mailbox/hooks/pre_tool_use.py\""
+            "command": "[ -f \"$HOME/.claude/mailbox/hooks/pre_tool_use.py\" ] && python3 \"$HOME/.claude/mailbox/hooks/pre_tool_use.py\" || true"
           }
         ]
       }
@@ -120,7 +120,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$HOME/.claude/mailbox/hooks/session_end.py\""
+            "command": "[ -f \"$HOME/.claude/mailbox/hooks/session_end.py\" ] && python3 \"$HOME/.claude/mailbox/hooks/session_end.py\" || true"
           }
         ]
       }

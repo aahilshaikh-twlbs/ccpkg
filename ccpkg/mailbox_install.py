@@ -36,7 +36,12 @@ def mailbox_src(root):
 def _hook_command(script):
     # type: (str) -> str
     # $HOME-relative, quoted so paths with spaces survive shell expansion.
-    return 'python3 "$HOME/.claude/mailbox/hooks/%s"' % script
+    # Guarded with `[ -f … ] && … || true` so a transiently-absent hook file
+    # (e.g. mid `brew upgrade`, before the symlink is repointed to the new keg)
+    # is a silent no-op instead of a non-zero exit Claude Code surfaces as
+    # "hook failed" / "operation blocked by hook". Mirrors the notify-hook guard.
+    path = '"$HOME/.claude/mailbox/hooks/%s"' % script
+    return "[ -f %s ] && python3 %s || true" % (path, path)
 
 
 def _ensure_symlink(src_abs, target):

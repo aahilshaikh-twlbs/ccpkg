@@ -43,7 +43,12 @@ def _hook_command(home: str, filename: str) -> str:
     # (the shell expands $HOME in Claude Code hook commands). The `home` arg is
     # accepted for signature stability but intentionally not interpolated as an
     # absolute path, so the vendored copy never bakes in a per-user home path.
-    return 'python3 "$HOME/.claude/mailbox/hooks/' + filename + '"'
+    # Guarded with `[ -f … ] && … || true` so a transiently-absent hook file
+    # (e.g. mid `brew upgrade`, before the symlink is repointed) is a silent
+    # no-op instead of a non-zero exit Claude Code reports as a failed/blocking
+    # hook. The hooks themselves are fail-open, so forcing exit 0 loses nothing.
+    path = '"$HOME/.claude/mailbox/hooks/' + filename + '"'
+    return "[ -f " + path + " ] && python3 " + path + " || true"
 
 
 def _event_has_mailbox(entries: List[dict]) -> bool:
