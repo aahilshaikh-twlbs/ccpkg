@@ -173,14 +173,14 @@ if [ -n "$cwd" ] && [ -d "$cwd" ]; then
     fi
 fi
 
-# 0. NUKE MODE INDICATOR — reads `ultracode` from settings.json; shows when armed.
+# 0. NUKE MODE INDICATOR — gated on THIS session's actual effort (CLAUDE_EFFORT),
+# NOT on settings.json. settings.json says what FUTURE sessions inherit; CLAUDE_EFFORT
+# says what this running session actually is. Showing the indicator everywhere
+# settings.json has ultracode would mislead in pre-arm sessions that aren't actually
+# nuke'd. Indicator now appears only when this session was launched in xhigh effort.
 nuke_str=""
-nuke_settings_path="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
-if [ -f "$nuke_settings_path" ]; then
-    nuke_armed=$(jq -r '.ultracode // false' "$nuke_settings_path" 2>/dev/null)
-    if [ "$nuke_armed" = "true" ]; then
-        nuke_str=$(printf "${BOLD}${FG_RED}🔴 NUKE${RESET} ${FG_GRAY}/nuke off when done${RESET}")
-    fi
+if [ "${CLAUDE_EFFORT}" = "xhigh" ]; then
+    nuke_str=$(printf "${BOLD}${FG_RED}🔴 NUKE${RESET} ${FG_GRAY}/nuke off when done${RESET}")
 fi
 
 # Assemble
