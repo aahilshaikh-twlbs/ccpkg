@@ -30,11 +30,38 @@ INBOX_TEMPLATE = """\
 swarm_id: {swarm_id}
 lead: {lead}
 sibling_leads: {siblings}
+main_task: {task}
 ---
+
+## Mission context
+
+You are **lead {lead}** on swarm {swarm_id}. The overall swarm task is:
+
+  {task}
+
+The sub-task below is YOUR slice of that. Your sibling leads ({siblings}) own the
+other slices in parallel — stay inside your slice and coordinate at the seams.
 
 ## Your sub-task
 
 {subtask}
+
+## Build your own team — do NOT run this solo
+
+You are a TEAM LEAD, not a worker. Stand up your OWN native agent team to execute
+this sub-task — the same persistent agent-team protocol the orchestrator used to
+launch you:
+
+1. Decompose your sub-task along its natural seams.
+2. `TeamCreate` a team, then spawn one focused teammate per seam with the `Agent`
+   tool (`run_in_background`), and coordinate them via the mailbox.
+3. Synthesize their outputs into your result.
+
+Only skip the team and do the work yourself if the sub-task is genuinely atomic
+(one small change with no parallelizable structure) — and say so in your result.
+
+Recursion ban: do NOT call /swarm — no nested swarms (your tier is agent teams,
+not swarms).
 
 ## Coordination
 
@@ -55,12 +82,13 @@ per-message board argument.) Then exit the session.
 """
 
 
-def inbox_body(swarm_id, lead, sibling_leads, subtask):
+def inbox_body(swarm_id, lead, sibling_leads, subtask, task):
     siblings = "[" + ", ".join(sibling_leads) + "]" if sibling_leads else "[]"
     return INBOX_TEMPLATE.format(
         swarm_id=swarm_id,
         lead=lead,
         siblings=siblings,
         subtask=subtask,
+        task=task,
         mailbox=MAILBOX,
     )
