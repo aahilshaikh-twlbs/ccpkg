@@ -109,6 +109,7 @@ def test_standing_directive_when_armed_no_intent(tmp_path):
     text = injected(proc)
     assert "NUKE MODE active" in text
     assert "agent teams" in text
+    assert "/swarm" in text  # v3 directive nudges to swarm on substantive tasks
 
 
 def test_silent_when_not_armed_no_intent(tmp_path):

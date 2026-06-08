@@ -46,7 +46,10 @@ STANDING_MSG = (
     "<system-reminder>\n"
     "\U0001f534 NUKE MODE active — ultracode on (xhigh + dynamic workflows). "
     "Prefer persistent agent teams (TeamCreate + mailbox) over ephemeral "
-    "subagents for implementation work.\n"
+    "subagents for implementation work. For substantive multi-aspect tasks "
+    "(refactors, audits, builds with >2 distinct concerns), call `/swarm "
+    "<task>` BEFORE writing code — it fans out across federated Claude leads "
+    "in iTerm2 tabs.\n"
     "</system-reminder>"
 )
 
