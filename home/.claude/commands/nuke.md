@@ -1,15 +1,19 @@
 ---
-description: Arm nuke mode — sticky session-long max-effort (ultracode + ultrathink + ultraplan + agent-team execution)
+description: Toggle nuke mode — persistent ultracode (xhigh effort + dynamic workflows). `/nuke` to arm, `/nuke off` to disarm.
 ---
 
-🔴 **Arming nuke mode for the rest of this session.**
+<<NUKE:$ARGUMENTS>>
 
-<<NUKE-ARM>>
+Nuke mode is a persistent toggle:
 
-Nuke mode is now active and stays on until this session ends. Every remaining
-turn runs at maximum effort: ultracode (Workflows by default), ultrathink (deep
-reasoning), ultraplan (plan first), with all execution handled by persistent
-agent teams coordinated via the mailbox — never ephemeral subagents.
+- `/nuke` (alias `/nuke arm`) — turns **ultracode** on (xhigh effort + dynamic
+  workflows) by writing it to your settings. It applies from your **next**
+  session; for the current session run `/effort ultracode` to apply it now.
+- `/nuke off` (alias `/nuke disarm`) — turns ultracode back off.
 
-Acknowledge that nuke mode is armed in one line, then continue with whatever the
-user has asked for, or await their next instruction.
+While armed, every session also prefers **persistent agent teams** (TeamCreate +
+mailbox) over ephemeral subagents for implementation work.
+
+Acknowledge in one line whether nuke mode was just armed or disarmed (based on
+the directive injected this turn), then continue with whatever the user asked
+for, or await their next instruction.
