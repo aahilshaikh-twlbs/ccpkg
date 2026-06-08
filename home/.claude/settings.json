@@ -123,14 +123,6 @@
             "command": "python3 \"$HOME/.claude/mailbox/hooks/session_end.py\""
           }
         ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 $HOME/.claude/hooks/nuke.py"
-          }
-        ]
       }
     ]
   },
