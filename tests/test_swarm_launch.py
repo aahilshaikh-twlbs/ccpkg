@@ -18,8 +18,8 @@ def test_launches_one_tab_per_subtask_and_returns_swarm_id(monkeypatch, tmp_path
 
     spawn_calls = []
 
-    def fake_spawn(env, cmd):
-        spawn_calls.append({"env": dict(env), "cmd": cmd})
+    def fake_spawn(env, cmd, cwd=None):
+        spawn_calls.append({"env": dict(env), "cmd": cmd, "cwd": cwd})
         return "PANE-" + env["SWARM_LEAD"]
 
     inject_calls = []
@@ -58,13 +58,19 @@ def test_launches_one_tab_per_subtask_and_returns_swarm_id(monkeypatch, tmp_path
         assert e["SWARM_LEAD"] in {"lead-1", "lead-2"}
         assert e["MAILBOX_BOARD"] == "swarm-" + sid
         assert "SWARM_WORKDIR" in e
+        # leads must launch in the orchestrator's repo, not the active tab's cwd
+        assert c["cwd"] is not None
+
+    # the injected kickoff must point each lead at its own inbox.md
+    for c in inject_calls:
+        assert "inbox.md" in c["text"]
 
 
 def test_falls_back_to_b_assisted_when_osascript_fails(monkeypatch, tmp_path, capsys):
     monkeypatch.delenv("SWARM_LEAD", raising=False)
     monkeypatch.setenv("CCPKG_SWARM_ROOT", str(tmp_path))
 
-    def boom(env, cmd):
+    def boom(env, cmd, cwd=None):
         raise launch.iterm.ITermError("automation denied")
 
     monkeypatch.setattr(launch.iterm, "spawn_tab", boom)

@@ -81,3 +81,76 @@ def test_close_panes_targets_each_pane(monkeypatch):
     assert len(calls) == 2
     assert "PANE-1" in calls[0]
     assert "PANE-2" in calls[1]
+
+
+def _capture_osa(monkeypatch, stdout=""):
+    captured = {}
+
+    def fake_run(args, **kwargs):
+        captured["input"] = kwargs.get("input")
+        result = mock.Mock()
+        result.returncode = 0
+        result.stdout = stdout
+        result.stderr = ""
+        return result
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    return captured
+
+
+def test_spawn_tab_cds_into_cwd_before_launch(monkeypatch):
+    """Probe 2 finding: new tabs inherit the active session's cwd, so spawn_tab
+    must cd into the target repo before launching claude."""
+    captured = _capture_osa(monkeypatch, stdout="PANE-1")
+    iterm.spawn_tab(env={"SWARM_ID": "x"}, cmd="claude", cwd="/repo/path")
+    osa = captured["input"]
+    assert "cd /repo/path" in osa
+    # the cd must precede the launch command
+    assert osa.index("cd /repo/path") < osa.index("claude")
+
+
+def test_spawn_tab_without_cwd_has_no_cd(monkeypatch):
+    captured = _capture_osa(monkeypatch, stdout="PANE-1")
+    iterm.spawn_tab(env={}, cmd="claude")
+    assert "cd " not in captured["input"]
+
+
+def test_spawn_tab_settles_before_writing_command(monkeypatch):
+    """Task 8 smoke finding: writing the launch command immediately on tab
+    creation races the new tab's login-shell startup and garbles the command
+    (observed `cd` -> `acd`). spawn_tab must let the shell settle first."""
+    captured = _capture_osa(monkeypatch, stdout="PANE-1")
+    iterm.spawn_tab(env={}, cmd="claude")
+    osa = captured["input"]
+    assert "delay" in osa
+    assert osa.index("delay") < osa.index("write text")
+
+
+def test_inject_addresses_session_by_iteration_not_id_lookup(monkeypatch):
+    """Probe 2 finding: `tell session id "X"` fails (-1728). Must iterate
+    windows/tabs/sessions and match `id of s`."""
+    captured = _capture_osa(monkeypatch)
+    iterm.inject("PANE-ABC", "hello")
+    osa = captured["input"]
+    assert "tell session id" not in osa          # the broken FORM A
+    assert "id of s" in osa                        # FORM B: match by id
+    assert "PANE-ABC" in osa
+
+
+def test_inject_submits_with_separate_return(monkeypatch):
+    """Probe 2 finding: write text's auto-newline is swallowed; submit needs a
+    separate bare return after typing the text without a trailing newline."""
+    captured = _capture_osa(monkeypatch)
+    iterm.inject("PANE-ABC", "do the thing")
+    osa = captured["input"]
+    assert "newline no" in osa                     # type without auto-newline
+    assert 'write text ""' in osa                  # separate return to submit
+
+
+def test_close_panes_addresses_session_by_iteration(monkeypatch):
+    captured = _capture_osa(monkeypatch)
+    iterm.close_panes(["PANE-1"])
+    osa = captured["input"]
+    assert "tell session id" not in osa
+    assert "id of s" in osa
+    assert "PANE-1" in osa

@@ -1,34 +1,28 @@
-"""Swarm kickoff prompt + inbox.md body templates."""
+"""Swarm kickoff prompt + inbox.md body templates.
 
-KICKOFF_TEMPLATE = """\
-You are swarm lead {lead} on swarm {swarm_id}. Your sub-task is in
-$SWARM_WORKDIR/inbox.md — read it now and follow it exactly.
-
-Coordination: you share the mailbox repo board with the orchestrator and your
-sibling leads ({siblings}). Use `mailbox send` / `mailbox inbox` to coordinate.
-File claims are auto-enforced (mailbox PreToolUse hook).
-
-If your sub-task benefits from parallel sub-agents, spawn your OWN team via the
-standard agent-team protocol (TeamCreate + Agent).
-
-CRITICAL: do NOT call /swarm yourself. No nested swarms.
-
-When you finish, write your result to $SWARM_WORKDIR/result.md and run:
-  mailbox send --board {swarm_board} --kind swarm_done \\
-    '{{"lead": "{lead}", "status": "ok", "result_path": "'$SWARM_WORKDIR'/result.md"}}'
-
-Then stop (the orchestrator collects from there).
+The kickoff is a SINGLE LINE injected into the lead's REPL: iTerm's `write text`
+submits on every embedded newline, so a multi-line kickoff would fire partial
+prompts (Probe 2 finding). All real instruction lives in inbox.md, which the
+lead reads. The lead invokes the mailbox CLI by its absolute path
+(`~/.claude/mailbox/mailbox`) because `mailbox` is not on $PATH, and `send`
+routes to the session's primary board implicitly (there is no --board flag).
 """
 
+# Absolute path to the mailbox CLI — `mailbox` is not on $PATH anywhere; the only
+# entry point is this symlink (-> opt-prefixed homebrew libexec).
+MAILBOX = "~/.claude/mailbox/mailbox"
 
-def kickoff(swarm_id, lead, sibling_leads, swarm_board):
-    siblings = ", ".join(sibling_leads) if sibling_leads else "none"
+KICKOFF_TEMPLATE = (
+    "You are swarm lead {lead} on swarm {swarm_id}. Read {inbox_path} now and "
+    "follow it exactly — it has your sub-task, coordination rules, and the "
+    "done-signal to run when finished, and do NOT call /swarm (no nested swarms)."
+)
+
+
+def kickoff(swarm_id, lead, inbox_path):
+    """One-line REPL kickoff pointing the lead at its inbox.md (no newlines)."""
     return KICKOFF_TEMPLATE.format(
-        lead=lead,
-        swarm_id=swarm_id,
-        siblings=siblings,
-        swarm_board=swarm_board,
-    )
+        lead=lead, swarm_id=swarm_id, inbox_path=inbox_path)
 
 
 INBOX_TEMPLATE = """\
@@ -45,17 +39,19 @@ sibling_leads: {siblings}
 ## Coordination
 
 You share the repo board with the orchestrator and your sibling leads. Use
-`mailbox send` / `mailbox inbox` to coordinate. Use file claims (auto via
-mailbox PreToolUse) to avoid clobbering siblings.
+`{mailbox} send` / `{mailbox} inbox` to coordinate (the bare `mailbox` command is
+not on PATH — always use that absolute path). File claims are auto-enforced via
+the mailbox PreToolUse hook, so avoid clobbering siblings.
 
 ## Done signal
 
-When you finish, write your result to $SWARM_WORKDIR/result.md and:
+When you finish, write your result to $SWARM_WORKDIR/result.md and run:
 
-  mailbox send --board swarm-{swarm_id} --kind swarm_done \\
+  {mailbox} send --kind swarm_done \\
     '{{"lead": "{lead}", "status": "ok", "result_path": "'$SWARM_WORKDIR'/result.md"}}'
 
-Then exit the session.
+(`send` posts to your primary board swarm-{swarm_id} automatically — it takes no
+per-message board argument.) Then exit the session.
 """
 
 
@@ -66,4 +62,5 @@ def inbox_body(swarm_id, lead, sibling_leads, subtask):
         lead=lead,
         siblings=siblings,
         subtask=subtask,
+        mailbox=MAILBOX,
     )

@@ -61,6 +61,22 @@ def test_cli_sweep_removes_workdirs(monkeypatch, tmp_path):
     assert not (tmp_path / "old").exists()
 
 
+def test_cli_collect_invokes_collect_and_prints_json(monkeypatch, capsys):
+    """The slash command runs `python3 -m ccpkg.swarm collect <id>` to gather
+    results; it must print JSON the orchestrator can parse and synthesize."""
+    def fake_collect(swarm_id, **kw):
+        assert swarm_id == "abc12345"
+        return {"lead-1": {"status": "ok", "result_text": "# summary\n- a"}}
+
+    monkeypatch.setattr(cli.launch, "collect", fake_collect)
+    rc = cli.main(["collect", "abc12345"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    data = json.loads(out)
+    assert data["lead-1"]["status"] == "ok"
+    assert "summary" in data["lead-1"]["result_text"]
+
+
 def test_cli_launch_calls_orchestrator(monkeypatch, tmp_path, capsys):
     monkeypatch.setenv("CCPKG_SWARM_ROOT", str(tmp_path))
     captured = {}

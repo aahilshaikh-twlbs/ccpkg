@@ -23,13 +23,38 @@ def _board(swarm_id):
     return "swarm-" + swarm_id
 
 
+def _orchestrator_session_id(swarm_id):
+    return "swarm-" + swarm_id + "-orchestrator"
+
+
+def _ensure_orchestrator(client, swarm_id):
+    """Idempotently join an orchestrator presence to the swarm board and return
+    its session_id.
+
+    The daemon's ps/poll_inbox derive the board set from the *caller's* own
+    presence (mailbox/src/mailbox/protocol.py strips any `board` kwarg), so the
+    orchestrator must be a real session joined to the swarm board to see the
+    leads. Re-joining is cheap and also refreshes the orchestrator's heartbeat
+    so its presence does not go stale during a long collect.
+    """
+    sid = _orchestrator_session_id(swarm_id)
+    client.request("join", {
+        "session_id": sid,
+        "label": sid,
+        "cwd": os.getcwd(),
+        "board_name": _board(swarm_id),
+    })
+    return sid
+
+
 def wait_for_presence(swarm_id, lead, timeout=45.0, poll_interval=1.0):
     """Return True once the lead's mailbox presence is active, else False on timeout."""
     target_label = "swarm-" + swarm_id + "-" + lead
     deadline = time.monotonic() + timeout
     client = _mailbox_client()
+    sid = _ensure_orchestrator(client, swarm_id)
     while time.monotonic() < deadline:
-        resp = client.request("ps", {"board": _board(swarm_id)})
+        resp = client.request("ps", {"session_id": sid})
         if resp.get("ok"):
             for p in resp.get("data", []) or []:
                 if (p.get("label") == target_label
@@ -40,20 +65,18 @@ def wait_for_presence(swarm_id, lead, timeout=45.0, poll_interval=1.0):
 
 
 def poll_done(swarm_id):
-    """Return all swarm_done messages currently visible on the swarm board.
+    """Return all swarm_done messages currently visible to the orchestrator.
 
     Each is a dict with: lead, status, result_path (decoded from body JSON).
     """
     client = _mailbox_client()
-    board = _board(swarm_id)
-    resp = client.request("poll_inbox", {"board": board})
+    sid = _ensure_orchestrator(client, swarm_id)
+    resp = client.request("poll_inbox", {"session_id": sid})
     if not resp.get("ok"):
         return []
     out = []
     for m in resp.get("data", []) or []:
         if m.get("kind") != "swarm_done":
-            continue
-        if m.get("board") and m.get("board") != board:
             continue
         try:
             parsed = json.loads(m.get("body") or "{}")

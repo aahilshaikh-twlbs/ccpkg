@@ -18,6 +18,12 @@ def _cmd_launch(args):
     return 0
 
 
+def _cmd_collect(args):
+    results = launch.collect(args.swarm_id)
+    print(json.dumps(results, indent=2))
+    return 0
+
+
 def _cmd_status(args):
     swarms = workdir.list_swarms()
     if not swarms:
@@ -61,6 +67,8 @@ def main(argv=None):
     sp = sub.add_parser("launch")
     sp.add_argument("--payload", required=True,
                     help="JSON: {task, subtasks: {lead: subtask}}")
+    sp = sub.add_parser("collect")
+    sp.add_argument("swarm_id")
     sub.add_parser("status")
     sp = sub.add_parser("close")
     sp.add_argument("swarm_id", nargs="?")
@@ -68,6 +76,7 @@ def main(argv=None):
     args = p.parse_args(argv)
     dispatch = {
         "launch": _cmd_launch,
+        "collect": _cmd_collect,
         "status": _cmd_status,
         "close": _cmd_close,
         "sweep": _cmd_sweep,

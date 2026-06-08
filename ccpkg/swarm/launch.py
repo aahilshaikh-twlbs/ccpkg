@@ -50,6 +50,9 @@ def launch_swarm(task, subtasks, fallback="assisted",
     swarm_board = "swarm-" + swarm_id
     pane_ids = {}
     fallback_used = False
+    # Leads must launch in the orchestrator's repo: a new iTerm tab inherits the
+    # active session's cwd, not ours (Probe 2 finding).
+    repo_cwd = os.getcwd()
 
     for lead in leads:
         env = {
@@ -61,10 +64,9 @@ def launch_swarm(task, subtasks, fallback="assisted",
         }
         cmd = "claude --dangerously-skip-permissions"
         kickoff = prompts.kickoff(swarm_id, lead,
-                                  [l for l in leads if l != lead],
-                                  swarm_board)
+                                  workdir.inbox_path(swarm_id, lead))
         try:
-            pid = iterm.spawn_tab(env, cmd)
+            pid = iterm.spawn_tab(env, cmd, cwd=repo_cwd)
             pane_ids[lead] = pid
         except iterm.ITermError as exc:
             if fallback != "assisted":
