@@ -8,6 +8,7 @@
     {"path": "commands/create-prd.md", "mode": "symlink", "os": "any", "layer": "base", "group": "Commands", "desc": "/create-prd: write a full PRD from the current conversation", "default": true},
     {"path": "commands/handoff.md", "mode": "symlink", "os": "any", "layer": "base", "group": "Commands", "desc": "/handoff: exhaustive segmented handoff doc when context runs low", "default": true},
     {"path": "commands/nuke.md", "mode": "symlink", "os": "any", "layer": "base", "group": "Commands", "desc": "/nuke: arm sticky session-long max-effort mode", "default": true},
+    {"path": "commands/swarm.md", "mode": "symlink", "os": "any", "layer": "base", "group": "Commands", "desc": "/swarm — fan out a task across federated Claude leads", "default": true},
     {"path": "hooks/nuke.py", "mode": "symlink", "os": "any", "layer": "base", "group": "Hooks", "desc": "nuke-mode hook: re-inject the max-effort directive each turn, clear on session end", "default": true},
     {"path": "skills/shannon", "mode": "symlink", "os": "any", "layer": "base", "group": "Skills", "desc": "/shannon: autonomous white-box web & API pentester skill", "default": true}
   ]
