@@ -61,10 +61,14 @@ cancels. Your selection is saved to `~/.claude/.ccpkg-profile.json`.
 **Re-running `ccpkg install` is how you update** — it reopens the picker pre-ticked from your
 saved selection, so you can add or remove features. No flag needed.
 
+The picker opens on a **preset screen** — pick *Everything*, *Recommended*, or *Minimal* in one
+keystroke, or *Custom* to walk each group. After applying, a summary screen recaps what landed.
+
 ```text
-ccpkg install                # interactive picker (pre-filled on a re-run)
-ccpkg install --yes          # headless: apply saved profile or defaults, no prompts
-ccpkg uninstall              # remove managed files, restore backups, drop mailbox + profile
+ccpkg install                       # interactive picker (preset screen, pre-filled on a re-run)
+ccpkg install --yes                 # headless: apply saved profile or defaults, no prompts
+ccpkg install --preset recommended  # headless preset: minimal | recommended | everything
+ccpkg uninstall                     # remove managed files, restore backups, drop mailbox + profile
 ```
 
 `--yes` (alias `--non-interactive`) is fully headless — it applies the saved profile, or the

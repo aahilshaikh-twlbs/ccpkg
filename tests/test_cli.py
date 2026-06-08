@@ -436,6 +436,206 @@ def test_install_ctrl_c_during_wizard_cancels(tmp_repo, tmp_home, monkeypatch, c
     assert "cancelled" in capsys.readouterr().out.lower()
 
 
+def test_install_parser_accepts_preset():
+    from ccpkg import cli
+    parser = cli._build_parser()
+    for name in ("minimal", "recommended", "everything"):
+        args = parser.parse_args(["install", "--preset", name])
+        assert args.preset == name
+    # default: no preset
+    args = parser.parse_args(["install"])
+    assert args.preset is None
+
+
+def test_install_preset_everything_selects_all(tmp_repo, tmp_home, monkeypatch):
+    # --preset everything is headless: skips the wizard, applies ALL surfaced ids,
+    # and writes NO profile.
+    from ccpkg import cli, profile, wizard, selectables, selection, manifest
+    monkeypatch.setattr(cli.config, "repo_root", lambda: tmp_repo)
+    monkeypatch.setattr(cli.config, "home_target", lambda: tmp_home)
+    monkeypatch.setattr(cli, "_stdin_is_tty", lambda: True)   # would be interactive
+
+    def _no_wizard(*a, **k):
+        raise AssertionError("wizard must not run with --preset")
+
+    monkeypatch.setattr(wizard, "run_wizard", _no_wizard)
+
+    captured = {}
+
+    def _capture_install(root, home_target, env, os_name, run=subprocess.run,
+                         interactive=False, selected=None):
+        captured["selected"] = selected
+        return installer.InstallReport(
+            os=os_name, deps={}, base_applied=[], overlay_applied=[],
+            plugins={}, mailbox={}, scan_findings=[], notes=[],
+        )
+
+    monkeypatch.setattr(installer, "install", _capture_install)
+
+    rc = cli.main(["install", "--preset", "everything"])
+    assert rc == 0
+    items = manifest.parse(cli.config.manifest_path(tmp_repo))
+    expected = cli._all_ids(items, selectables.SELECTABLES, False)
+    assert captured["selected"] == expected
+    assert profile.load(tmp_home) is None   # headless: no profile written
+
+
+def test_install_preset_recommended_matches_defaults(tmp_repo, tmp_home, monkeypatch):
+    from ccpkg import cli, selectables, selection, manifest
+    monkeypatch.setattr(cli.config, "repo_root", lambda: tmp_repo)
+    monkeypatch.setattr(cli.config, "home_target", lambda: tmp_home)
+    captured = {}
+
+    def _capture_install(root, home_target, env, os_name, run=subprocess.run,
+                         interactive=False, selected=None):
+        captured["selected"] = selected
+        return installer.InstallReport(
+            os=os_name, deps={}, base_applied=[], overlay_applied=[],
+            plugins={}, mailbox={}, scan_findings=[], notes=[],
+        )
+
+    monkeypatch.setattr(installer, "install", _capture_install)
+
+    rc = cli.main(["install", "--preset", "recommended"])
+    assert rc == 0
+    items = manifest.parse(cli.config.manifest_path(tmp_repo))
+    expected = selection.default_ids(items, selectables.SELECTABLES, False)
+    assert captured["selected"] == expected
+
+
+def test_install_preset_minimal_is_required_only(tmp_repo, tmp_home, monkeypatch):
+    # minimal = required-only. The fixture manifest marks nothing required, so the
+    # minimal set is empty — and crucially is NOT the default-on set.
+    from ccpkg import cli, selectables, selection, manifest
+    monkeypatch.setattr(cli.config, "repo_root", lambda: tmp_repo)
+    monkeypatch.setattr(cli.config, "home_target", lambda: tmp_home)
+    captured = {}
+
+    def _capture_install(root, home_target, env, os_name, run=subprocess.run,
+                         interactive=False, selected=None):
+        captured["selected"] = selected
+        return installer.InstallReport(
+            os=os_name, deps={}, base_applied=[], overlay_applied=[],
+            plugins={}, mailbox={}, scan_findings=[], notes=[],
+        )
+
+    monkeypatch.setattr(installer, "install", _capture_install)
+
+    rc = cli.main(["install", "--preset", "minimal"])
+    assert rc == 0
+    items = manifest.parse(cli.config.manifest_path(tmp_repo))
+    defaults = selection.default_ids(items, selectables.SELECTABLES, False)
+    assert captured["selected"] == set()
+    assert captured["selected"] != defaults
+
+
+def test_install_renders_summary_on_interactive_tty(tmp_repo, tmp_home, monkeypatch):
+    # On the interactive TTY path, after the plain report we ALSO call
+    # wizard.render_summary(summary, out) with the agreed dict shape.
+    from ccpkg import cli, wizard, profile
+    monkeypatch.setattr(cli.config, "repo_root", lambda: tmp_repo)
+    monkeypatch.setattr(cli.config, "home_target", lambda: tmp_home)
+    monkeypatch.setattr(cli, "_stdin_is_tty", lambda: True)
+    monkeypatch.setattr(cli, "_stdout_is_tty", lambda: True)
+    monkeypatch.setattr(wizard, "run_wizard",
+                        lambda stages, pre, existing=False: {"settings.json"})
+
+    def _report_install(root, home_target, env, os_name, run=subprocess.run,
+                        interactive=False, selected=None):
+        return installer.InstallReport(
+            os=os_name, deps={"git": "present"},
+            base_applied=[("settings.json", "merged")],
+            overlay_applied=[("commands/private.md", "linked")],
+            plugins={"superpowers": "installed"},
+            mailbox={"daemon": "running"},
+            scan_findings=[], notes=["a note"],
+        )
+
+    monkeypatch.setattr(installer, "install", _report_install)
+
+    captured = {}
+    monkeypatch.setattr(wizard, "render_summary",
+                        lambda summary, out: captured.update(summary=summary, out=out),
+                        raising=False)
+
+    rc = cli.main(["install"])
+    assert rc == 0
+    s = captured["summary"]
+    assert s["applied"] == [("settings.json", "merged"),
+                            ("commands/private.md", "linked")]
+    assert s["plugins"] == {"superpowers": "installed"}
+    assert s["mailbox"] == {"daemon": "running"}
+    assert s["notes"] == ["a note"]
+    assert isinstance(s["skipped"], list)        # ids not selected
+    assert "settings.json" not in s["skipped"]   # it WAS selected
+
+
+def test_install_summary_skipped_when_not_tty(tmp_repo, tmp_home, monkeypatch):
+    # Headless / non-TTY path must NOT call render_summary (keeps plain output
+    # parseable and avoids styled noise in pipes).
+    from ccpkg import cli, wizard
+    monkeypatch.setattr(cli.config, "repo_root", lambda: tmp_repo)
+    monkeypatch.setattr(cli.config, "home_target", lambda: tmp_home)
+    monkeypatch.setattr(installer, "install", _stub_install)
+
+    called = {"render": False}
+    monkeypatch.setattr(wizard, "render_summary",
+                        lambda summary, out: called.__setitem__("render", True),
+                        raising=False)
+
+    rc = cli.main(["install", "--yes"])   # headless
+    assert rc == 0
+    assert called["render"] is False
+
+
+def test_install_summary_guarded_when_render_absent(tmp_repo, tmp_home, monkeypatch):
+    # If wizard.render_summary hasn't landed yet, the interactive install must
+    # still succeed (getattr guard) rather than crash.
+    from ccpkg import cli, wizard
+    monkeypatch.setattr(cli.config, "repo_root", lambda: tmp_repo)
+    monkeypatch.setattr(cli.config, "home_target", lambda: tmp_home)
+    monkeypatch.setattr(cli, "_stdin_is_tty", lambda: True)
+    monkeypatch.setattr(cli, "_stdout_is_tty", lambda: True)
+    monkeypatch.setattr(wizard, "run_wizard",
+                        lambda stages, pre, existing=False: {"settings.json"})
+    monkeypatch.setattr(installer, "install", _stub_install)
+    # Ensure the attribute is absent.
+    monkeypatch.delattr(wizard, "render_summary", raising=False)
+
+    rc = cli.main(["install"])
+    assert rc == 0
+
+
+def test_install_applies_synthetic_extra_manifest_item(tmp_repo, tmp_home, monkeypatch):
+    # New installables flow generically: a manifest item added by 'content' (here
+    # a synthetic default-on symlink) is applied by a headless install with no
+    # cli/flow changes needed.
+    from ccpkg import cli
+    _seed_localenv(tmp_repo, tmp_home)
+    _patch_resolution(monkeypatch, tmp_repo, tmp_home)
+
+    # Add a brand-new manifest item + its source file.
+    manifest_path = os.path.join(tmp_repo, "manifest.json")
+    with open(manifest_path) as fh:
+        data = json.load(fh)
+    data["items"].append({
+        "path": "commands/brand-new.md", "mode": "symlink",
+        "os": "any", "layer": "base", "group": "Commands",
+        "desc": "a freshly surfaced command", "default": True,
+    })
+    with open(manifest_path, "w") as fh:
+        json.dump(data, fh, indent=2)
+    src_cmd = os.path.join(tmp_repo, "home", ".claude", "commands")
+    os.makedirs(src_cmd, exist_ok=True)
+    with open(os.path.join(src_cmd, "brand-new.md"), "w") as fh:
+        fh.write("# brand new command\n")
+
+    rc = cli.main(["install", "--yes"])   # headless: defaults => includes new item
+    assert rc == 0
+    applied = os.path.join(tmp_home, "commands", "brand-new.md")
+    assert os.path.exists(applied)
+
+
 def test_version_flag_prints_version(capsys):
     from ccpkg import cli, __version__
     import pytest

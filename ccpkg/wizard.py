@@ -5,6 +5,7 @@ renderers (raw-mode termios + numbered fallback) are added separately and only
 drive this state.
 """
 import os
+import random
 import select
 import shutil
 import sys
@@ -18,6 +19,10 @@ _SETTINGS_WARNING = ("warning: settings.json deselected — "
 
 
 class WizardState:
+    # Install presets, in display order. "Custom" walks the per-group picker;
+    # the others compute a selection set from the stages and jump to review.
+    PRESETS = ["Everything", "Recommended", "Minimal", "Custom"]
+
     def __init__(self, stages, preselected, existing=False):
         # type: (List[Stage], Set[str], bool) -> None
         self.stages = stages
@@ -27,6 +32,9 @@ class WizardState:
         self._done = False
         self._review = False
         self._intro = True
+        # Preset-select screen, shown after the intro and before the groups.
+        self._preset = False
+        self.preset_cursor = self.PRESETS.index("Recommended")
         # True when a saved profile already exists (re-run / update), so the
         # splash can say "existing install" instead of "fresh install".
         self.existing = bool(existing)
@@ -44,6 +52,31 @@ class WizardState:
         # type: () -> bool
         return self._intro
 
+    def is_preset(self):
+        # type: () -> bool
+        return self._preset
+
+    def all_entries(self):
+        # type: () -> List
+        return [e for stage in self.stages for e in stage.entries]
+
+    def preset_ids(self, name):
+        # type: (str) -> Set[str]
+        """The id-set a named preset would select, computed from the stages.
+
+        Everything = all; Recommended = default-on entries; Minimal = required
+        entries (falling back to Recommended when nothing is flagged required);
+        Custom = the current preselection (left untouched, picked by hand)."""
+        entries = self.all_entries()
+        if name == "Everything":
+            return {e.id for e in entries}
+        if name == "Recommended":
+            return {e.id for e in entries if e.default}
+        if name == "Minimal":
+            required = {e.id for e in entries if getattr(e, "required", False)}
+            return required if required else {e.id for e in entries if e.default}
+        return set(self.selected)  # Custom
+
     def is_review(self):
         # type: () -> bool
         return self._review
@@ -59,8 +92,32 @@ class WizardState:
     # --- mutations -----------------------------------------------------
     def begin(self):
         # type: () -> None
-        # Leave the intro splash and land on the first stage.
+        # Leave the intro/preset screens and land on the first group stage.
         self._intro = False
+        self._preset = False
+
+    def to_preset(self):
+        # type: () -> None
+        # Leave the intro splash and land on the preset-select screen.
+        self._intro = False
+        self._preset = True
+
+    def preset_move(self, delta):
+        # type: (int) -> None
+        n = len(self.PRESETS)
+        self.preset_cursor = max(0, min(n - 1, self.preset_cursor + delta))
+
+    def apply_preset(self):
+        # type: () -> None
+        # Enter on the preset screen: "Custom" walks the groups; any other
+        # preset fixes the selection and jumps straight to the review screen.
+        name = self.PRESETS[self.preset_cursor]
+        if name == "Custom":
+            self.begin()
+            return
+        self.selected = self.preset_ids(name)
+        self._preset = False
+        self._review = True
 
     def move(self, delta):
         # type: (int) -> None
@@ -108,6 +165,11 @@ class WizardState:
 
     def prev_stage(self):
         # type: () -> None
+        if self._preset:
+            # Back from the preset screen returns to the intro splash.
+            self._preset = False
+            self._intro = True
+            return
         if self._review:
             self._review = False
             return
@@ -147,36 +209,73 @@ _CHECK_OFF = "[ ]"   # unselected entry
 _POINTER = "▸"       # ▸ cursor
 _BAR = "▌"           # ▌ group-header accent bar
 
-# Block wordmark for the splash. Five rows, letters c c p k g (4 cols + 1 gap).
+# Block wordmark for the splash. "ANSI Shadow" style — the letters c c p k g
+# in shadowed box-drawing glyphs. Six rows, all 41 columns wide.
 _WORDMARK_ART = [
-    "████ ████ ████ █  █ ████",
-    "█    █    █  █ █ █  █    ",
-    "█    █    ████ ██   █ ██ ",
-    "█    █    █    █ █  █  █  ",
-    "████ ████ █    █  █ ████ ",
+    " ██████╗ ██████╗██████╗ ██╗  ██╗ ██████╗ ",
+    "██╔════╝██╔════╝██╔══██╗██║ ██╔╝██╔════╝ ",
+    "██║     ██║     ██████╔╝█████╔╝ ██║  ███╗",
+    "██║     ██║     ██╔═══╝ ██╔═██╗ ██║   ██║",
+    "╚██████╗╚██████╗██║     ██║  ██╗╚██████╔╝",
+    " ╚═════╝ ╚═════╝╚═╝     ╚═╝  ╚═╝ ╚═════╝ ",
 ]
+
+
+# Curated accent hues, à la Claude Code's /color. A per-run scheme picks one of
+# these; header/cursor/accent all derive from it, while 'sel' (green) and 'warn'
+# (yellow) stay fixed so their *meaning* (selected / warning) is stable.
+_ACCENT_CODES = [
+    "36",        # cyan (the original)
+    "35",        # magenta
+    "34",        # blue
+    "32",        # green
+    "96",        # bright cyan
+    "95",        # bright magenta
+    "94",        # bright blue
+    "38;5;39",   # azure
+    "38;5;170",  # orchid
+    "38;5;208",  # orange
+    "38;5;75",   # sky blue
+    "38;5;141",  # violet
+]
+_DEFAULT_ACCENT = "36"
+# Module-level active accent for the current run. Reset per run by
+# _init_color_scheme(); seedable so tests can assert a stable scheme.
+_active_accent = _DEFAULT_ACCENT
+
+
+def _init_color_scheme(seed=None):
+    # type: (Optional[int]) -> str
+    """Choose this run's accent hue at random. Pass a seed for a deterministic
+    scheme (tests). Affects color output only; plain mode is unchanged."""
+    global _active_accent
+    _active_accent = random.Random(seed).choice(_ACCENT_CODES)
+    return _active_accent
 
 
 class _Palette:
     """SGR wrapper. When `on` is False every method is a no-op passthrough, so
-    the same render code produces plain text for non-TTY/NO_COLOR output."""
+    the same render code produces plain text for non-TTY/NO_COLOR output. The
+    accent hue is per-run (see _init_color_scheme); meaning-bearing colors
+    (sel=green, warn=yellow) are fixed regardless of the accent."""
 
-    def __init__(self, enabled):
-        # type: (bool) -> None
+    def __init__(self, enabled, accent=_DEFAULT_ACCENT):
+        # type: (bool, str) -> None
         self.on = bool(enabled)
+        self.accent_code = accent
 
     def _w(self, code, s):
         # type: (str, str) -> str
         return ("\x1b[%sm%s\x1b[0m" % (code, s)) if self.on else s
 
-    def header(self, s):  # bold cyan
-        return self._w("1;36", s)
+    def header(self, s):  # bold accent
+        return self._w("1;" + self.accent_code, s)
 
-    def accent(self, s):  # cyan
-        return self._w("36", s)
+    def accent(self, s):  # accent
+        return self._w(self.accent_code, s)
 
-    def cursor(self, s):  # bold cyan pointer
-        return self._w("1;36", s)
+    def cursor(self, s):  # bold accent pointer
+        return self._w("1;" + self.accent_code, s)
 
     def dim(self, s):
         return self._w("2", s)
@@ -192,6 +291,13 @@ class _Palette:
 
     def warn(self, s):    # yellow
         return self._w("33", s)
+
+
+def _make_palette(out):
+    # type: (object) -> _Palette
+    """The palette for a render: color gated on _color_enabled(out), accent set
+    to this run's scheme."""
+    return _Palette(_color_enabled(out), _active_accent)
 
 
 def _color_enabled(out):
@@ -213,6 +319,33 @@ def _term_width(out):
     return max(54, min(cols, 84))
 
 
+def _left_margin(width):
+    # type: (int) -> str
+    """Spaces to left-pad every line so the `width`-column box sits centered in
+    the terminal. Falls back to no margin when the size can't be determined."""
+    try:
+        cols = shutil.get_terminal_size((76, 24)).columns
+    except Exception:
+        cols = width
+    return " " * max(0, (cols - width) // 2)
+
+
+def _entry_meta(e):
+    # type: (object) -> str
+    """One-line metadata for an entry's detail line. Files show `path · mode`;
+    plugins show `plugin · scope`; the mailbox shows `coordinator`."""
+    kind = getattr(e, "kind", "")
+    if kind == "file":
+        parts = [p for p in (getattr(e, "path", ""), getattr(e, "mode", "")) if p]
+        return " · ".join(parts)
+    if kind == "plugin":
+        scope = getattr(e, "scope", "")
+        return "plugin" + ((" · " + scope) if scope else "")
+    if kind == "mailbox":
+        return "coordinator"
+    return ""
+
+
 def _name_col_width(entries, gutter=4):
     # type: (List, int) -> int
     """Width of the entry-name column = widest id + a comfortable gutter, so
@@ -223,24 +356,26 @@ def _name_col_width(entries, gutter=4):
     return max(len(e.id) for e in entries) + gutter
 
 
-def _emit_top(out, title, crumb, width, pal):
-    # type: (object, str, str, int, _Palette) -> None
-    """Top rule: ┌─ <title> ──────── <crumb> ─┐ spanning `width` columns."""
+def _emit_top(out, title, crumb, width, pal, margin=""):
+    # type: (object, str, str, int, _Palette, str) -> None
+    """Top rule: ┌─ <title> ──────── <crumb> ─┐ spanning `width` columns,
+    shifted right by `margin` to center the box."""
     left = "┌─ " + title + " "
     right = " " + crumb + " ─┐"
     fill = max(1, width - len(left) - len(right))
     if pal.on:
-        out.write("\x1b[36m┌─ \x1b[1m" + title + "\x1b[22m\x1b[36m "
-                  + "─" * fill + " \x1b[1m" + crumb
-                  + "\x1b[22m\x1b[36m ─┐\x1b[0m\r\n")
+        ac = pal.accent_code
+        out.write(margin + "\x1b[%sm┌─ \x1b[1m%s\x1b[22m\x1b[%sm %s \x1b[1m%s"
+                  "\x1b[22m\x1b[%sm ─┐\x1b[0m\r\n"
+                  % (ac, title, ac, "─" * fill, crumb, ac))
     else:
-        out.write(left + "─" * fill + right + "\r\n")
+        out.write(margin + left + "─" * fill + right + "\r\n")
 
 
-def _emit_footer(out, left, right, width, pal):
-    # type: (object, str, str, int, _Palette) -> None
+def _emit_footer(out, left, right, width, pal, margin=""):
+    # type: (object, str, str, int, _Palette, str) -> None
     pad = max(2, width - len(left) - len(right) - 2)
-    out.write(pal.dim("  " + left + " " * pad + right) + "\r\n")
+    out.write(margin + pal.dim("  " + left + " " * pad + right) + "\r\n")
 
 
 def _stage_dots(state, pal):
@@ -292,24 +427,26 @@ def _render_review_numbered(state, out):
 
 def _render_review_raw(state, out):
     # type: (WizardState, object) -> None
-    pal = _Palette(_color_enabled(out))
+    pal = _make_palette(out)
     width = _term_width(out)
+    m = _left_margin(width)
     out.write(_CLEAR)
-    _emit_top(out, "ccpkg install", "review selection", width, pal)
-    out.write("\r\n")
+    _emit_top(out, "ccpkg install", "review selection", width, pal, m)
+    out.write(m + "\r\n")
     for stage in state.stages:
-        out.write("  %s\r\n" % pal.bold(stage.name))
+        out.write(m + "  %s\r\n" % pal.bold(stage.name))
         chosen = [e for e in stage.entries if state.is_selected(e.id)]
         if chosen:
             for e in chosen:
-                out.write("    %s %s\r\n" % (pal.selbold(_CHECK_ON), e.id))
+                out.write(m + "    %s %s\r\n" % (pal.selbold(_CHECK_ON), e.id))
         else:
-            out.write("    %s\r\n" % pal.dim("(none)"))
+            out.write(m + "    %s\r\n" % pal.dim("(none)"))
     warn = _soft_warning(state)
     if warn:
-        out.write("\r\n  %s\r\n" % pal.warn(warn))
-    out.write("\r\n")
-    _emit_footer(out, "[ esc back ]", "[ ⏎ apply ]", width, pal)
+        out.write(m + "\r\n")
+        out.write(m + "  %s\r\n" % pal.warn(warn))
+    out.write(m + "\r\n")
+    _emit_footer(out, "[ esc back ]", "[ ⏎ apply ]", width, pal, m)
     out.flush()
 
 
@@ -371,6 +508,8 @@ def run_wizard(stages, preselected, in_stream=None, out_stream=None,
     out_stream = out_stream if out_stream is not None else sys.stdout
     if not stages:
         return set(preselected)
+    # Pick this run's randomized accent scheme (no-op for plain output).
+    _init_color_scheme()
     if _is_tty(in_stream) and _is_tty(out_stream):
         # KeyboardInterrupt (BaseException) propagates for a clean Ctrl-C; any
         # other failure (e.g. missing termios) degrades to the numbered renderer.
@@ -396,46 +535,153 @@ def _render_intro_raw(state, out):
     # type: (WizardState, object) -> None
     """Splash shown once before the first group: block wordmark, tagline,
     install status, a one-line orientation, and a begin/cancel footer."""
-    pal = _Palette(_color_enabled(out))
+    pal = _make_palette(out)
     width = _term_width(out)
+    m = _left_margin(width)
     out.write(_CLEAR)
-    _emit_top(out, "ccpkg", "welcome", width, pal)
-    out.write("\r\n")
+    _emit_top(out, "ccpkg", "welcome", width, pal, m)
+    out.write(m + "\r\n")
     for row in _WORDMARK_ART:
-        out.write("   %s\r\n" % pal.accent(row))
-    out.write("\r\n")
-    out.write("   %s\r\n" % pal.dim("Claude Code environment-as-code"))
+        out.write(m + "   %s\r\n" % pal.accent(row))
+    out.write(m + "\r\n")
+    out.write(m + "   %s\r\n" % pal.dim("Claude Code environment-as-code"))
     n = len(state.stages)
     status = "existing install · %d group%s" if state.existing else \
              "fresh install · %d group%s"
-    out.write("   %s\r\n\r\n" % pal.dim(status % (n, "" if n == 1 else "s")))
+    out.write(m + "   %s\r\n" % pal.dim(status % (n, "" if n == 1 else "s")))
+    out.write(m + "\r\n")
     orient = "↑↓ move · space toggles · ⏎ continues · esc back"
-    out.write("   %s\r\n\r\n" % pal.dim(orient))
-    _emit_footer(out, "[ ⏎ begin ]", "[ esc cancel ]", width, pal)
+    out.write(m + "   %s\r\n" % pal.dim(orient))
+    out.write(m + "\r\n")
+    _emit_footer(out, "[ ⏎ begin ]", "[ esc cancel ]", width, pal, m)
+    out.flush()
+
+
+# Preset blurbs, in WizardState.PRESETS order.
+_PRESET_BLURBS = {
+    "Everything": "every group and option",
+    "Recommended": "the sensible default set",
+    "Minimal": "only the essentials",
+    "Custom": "pick group by group",
+}
+
+
+def _render_preset_raw(state, out):
+    # type: (WizardState, object) -> None
+    """Preset-select screen, shown after the intro and before the per-group
+    picker. ↑↓ move · ⏎ select · ← back · esc cancel."""
+    pal = _make_palette(out)
+    width = _term_width(out)
+    m = _left_margin(width)
+    out.write(_CLEAR)
+    _emit_top(out, "ccpkg install", "choose a preset", width, pal, m)
+    out.write(m + "\r\n")
+    out.write(m + "  %s %s\r\n" % (pal.accent(_BAR), pal.header("Install preset")))
+    out.write(m + "\r\n")
+    hint = pal.dim("↑↓ move · ⏎ select · ← back · esc cancel")
+    out.write(m + "  %s\r\n" % hint)
+    out.write(m + "\r\n")
+    col = max(len(n) for n in state.PRESETS) + 4
+    for i, name in enumerate(state.PRESETS):
+        is_cur = (i == state.preset_cursor)
+        pointer = pal.cursor(_POINTER) if is_cur else " "
+        label = "%-*s" % (col, name)
+        label = pal.bold(label) if is_cur else label
+        blurb = _PRESET_BLURBS.get(name, "")
+        if name == "Custom":
+            tail = blurb
+        else:
+            count = len(state.preset_ids(name))
+            tail = "%s · %d item%s" % (blurb, count, "" if count == 1 else "s")
+        out.write(m + " %s %s %s\r\n" % (pointer, label, pal.dim(tail)))
+    out.write(m + "\r\n")
+    _emit_footer(out, "[ esc cancel ]", "[ ⏎ select ]", width, pal, m)
+    out.flush()
+
+
+def render_summary(summary, out):
+    # type: (dict, object) -> None
+    """Non-interactive post-install recap, boxed in the wizard's style. Writes
+    to `out` and returns — there is no input loop. `summary` is a dict with:
+
+      applied: list of (label, status) tuples
+      plugins: dict name -> status
+      mailbox: dict name -> status
+      notes:   list of str
+      skipped: list of label
+
+    All keys optional; missing ones render as an empty/(none) section."""
+    pal = _make_palette(out)
+    width = _term_width(out)
+    m = _left_margin(width)
+    _emit_top(out, "ccpkg install", "complete", width, pal, m)
+    out.write(m + "\r\n")
+
+    def _checked_section(title, rows):
+        out.write(m + "  %s\r\n" % pal.bold(title))
+        if rows:
+            for label, status in rows:
+                if status:
+                    out.write(m + "    %s %s  %s\r\n"
+                              % (pal.selbold(_CHECK_ON), label, pal.dim(status)))
+                else:
+                    out.write(m + "    %s %s\r\n" % (pal.selbold(_CHECK_ON), label))
+        else:
+            out.write(m + "    %s\r\n" % pal.dim("(none)"))
+        out.write(m + "\r\n")
+
+    applied = summary.get("applied") or []
+    _checked_section("Applied", [(str(a), str(b)) for a, b in applied])
+
+    plugins = summary.get("plugins") or {}
+    _checked_section("Plugins", [(str(k), str(v)) for k, v in plugins.items()])
+
+    mailbox = summary.get("mailbox") or {}
+    _checked_section("Mailbox", [(str(k), str(v)) for k, v in mailbox.items()])
+
+    skipped = summary.get("skipped") or []
+    if skipped:
+        out.write(m + "  %s\r\n" % pal.bold("Skipped"))
+        for label in skipped:
+            out.write(m + "    %s %s\r\n"
+                      % (pal.dim(_CHECK_OFF), pal.dim(str(label))))
+        out.write(m + "\r\n")
+
+    notes = summary.get("notes") or []
+    if notes:
+        out.write(m + "  %s\r\n" % pal.bold("Notes"))
+        for note in notes:
+            out.write(m + "    %s %s\r\n" % (pal.dim("·"), pal.dim(str(note))))
+        out.write(m + "\r\n")
+
+    _emit_footer(out, "[ done ]", "[ ccpkg ]", width, pal, m)
     out.flush()
 
 
 def _render_raw(state, out):
     # type: (WizardState, object) -> None
-    pal = _Palette(_color_enabled(out))
+    pal = _make_palette(out)
     width = _term_width(out)
+    m = _left_margin(width)
     stage = state.current_stage()
     out.write(_CLEAR)
     _emit_top(out, "ccpkg install",
               "group %d/%d" % (state.stage_index + 1, len(state.stages)),
-              width, pal)
-    out.write("\r\n")
+              width, pal, m)
+    out.write(m + "\r\n")
     # Prominent group header — an accent bar + the group name in bold, so each
     # section is clearly its own grouping rather than a flat list.
     n_sel = sum(1 for e in stage.entries if state.is_selected(e.id))
     n_all = len(stage.entries)
-    out.write("  %s %s   %s\r\n" % (
+    out.write(m + "  %s %s   %s\r\n" % (
         pal.accent(_BAR), pal.header(stage.name),
         pal.dim("%d option%s · %d selected"
                 % (n_all, "" if n_all == 1 else "s", n_sel))))
-    out.write("  %s\r\n\r\n" % _stage_dots(state, pal))
+    out.write(m + "  %s\r\n" % _stage_dots(state, pal))
+    out.write(m + "\r\n")
     hint = pal.dim("space toggle · ↑↓ move · ⏎ next · ← → groups · a all · n none · esc back")
-    out.write("  %s\r\n\r\n" % hint)
+    out.write(m + "  %s\r\n" % hint)
+    out.write(m + "\r\n")
     col = _name_col_width(stage.entries)
     for i, e in enumerate(stage.entries):
         is_cur = (i == state.cursor)
@@ -444,9 +690,18 @@ def _render_raw(state, out):
         box = pal.selbold(_CHECK_ON) if sel else pal.dim(_CHECK_OFF)
         name = "%-*s" % (col, e.id)
         name = pal.bold(name) if is_cur else name
-        out.write(" %s %s %s %s\r\n" % (pointer, box, name, pal.dim(e.desc)))
-    out.write("\r\n")
-    _emit_footer(out, "[ esc back ]", "[ ⏎ continue → ]", width, pal)
+        out.write(m + " %s %s %s %s\r\n" % (pointer, box, name, pal.dim(e.desc)))
+    # Detail line for the highlighted entry: its description plus metadata
+    # (path · mode for files, plugin · scope for plugins) so the cursor's
+    # purpose and what it contributes are obvious at a glance.
+    if stage.entries:
+        cur = stage.entries[state.cursor]
+        meta = _entry_meta(cur)
+        detail = cur.desc + ((" · " + meta) if meta else "")
+        out.write(m + "\r\n")
+        out.write(m + "  %s %s\r\n" % (pal.accent(_POINTER), pal.dim(detail)))
+    out.write(m + "\r\n")
+    _emit_footer(out, "[ esc back ]", "[ ⏎ continue → ]", width, pal, m)
     out.flush()
 
 
@@ -497,6 +752,8 @@ def _raw_mode_loop(stages, preselected, in_stream, out_stream, existing=False):
         while not state.is_done():
             if state.is_intro():
                 _render_intro_raw(state, out_stream)
+            elif state.is_preset():
+                _render_preset_raw(state, out_stream)
             elif state.is_review():
                 _render_review_raw(state, out_stream)
             else:
@@ -507,12 +764,27 @@ def _raw_mode_loop(stages, preselected, in_stream, out_stream, existing=False):
                 raise KeyboardInterrupt
             if state.is_intro():
                 if key in ("enter", "right"):
-                    state.begin()
+                    state.to_preset()
                 elif key in ("esc", "q"):
                     # Only Esc/q cancels on the splash (terminal restored below).
                     # Arrow keys must NOT cancel — left/right just navigate.
                     raise KeyboardInterrupt
                 # ignore every other key (incl. lone 'left') on the intro
+                continue
+            if state.is_preset():
+                if key == "up":
+                    state.preset_move(-1)
+                elif key == "down":
+                    state.preset_move(1)
+                elif key in ("enter", "right"):
+                    state.apply_preset()
+                elif key == "left":
+                    # Left navigates back to the intro (not a cancel).
+                    state.prev_stage()
+                elif key in ("esc", "q"):
+                    # Only Esc/q cancels; arrows never do.
+                    raise KeyboardInterrupt
+                # ignore every other key on the preset screen
                 continue
             if state.is_review():
                 if key == "enter":

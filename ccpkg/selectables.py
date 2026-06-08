@@ -18,11 +18,11 @@ class Selectable:
 
 SELECTABLES = [
     Selectable(id="superpowers", kind="plugin", group="Plugins",
-               desc="skills: brainstorming, TDD, debugging", default=True),
+               desc="skill bundle: brainstorming, TDD, systematic debugging, plan writing", default=True),
     Selectable(id="frontend-design", kind="plugin", group="Plugins",
-               desc="distinctive frontend UI generation", default=True),
+               desc="generates distinctive, non-generic production-grade frontend UIs", default=True),
     Selectable(id="understand-anything", kind="plugin", group="Plugins",
-               desc="codebase knowledge graphs", default=True),
+               desc="build interactive codebase knowledge graphs & guided tours", default=True),
     Selectable(id="mailbox", kind="mailbox", group="Coordination",
-               desc="cross-session file-claim coordinator", default=True),
+               desc="cross-session file-claim coordinator so parallel agents don't clobber edits", default=True),
 ]

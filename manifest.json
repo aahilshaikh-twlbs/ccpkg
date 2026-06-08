@@ -1,14 +1,14 @@
 {
   "items": [
-    {"path": "settings.json", "mode": "merge", "os": "any", "layer": "base", "group": "Core", "desc": "Claude Code settings (deep-merged)", "default": true},
-    {"path": "settings.local.json.tmpl", "mode": "template", "os": "any", "layer": "base", "group": "Core", "desc": "per-machine local settings", "default": true},
-    {"path": "statusline.sh", "mode": "symlink", "os": "any", "layer": "base", "group": "Core", "desc": "custom statusline", "default": true},
-    {"path": "monthly-cost.sh", "mode": "symlink", "os": "any", "layer": "base", "group": "Core", "desc": "monthly cost report script", "default": true},
-    {"path": "yearly-cost.sh", "mode": "symlink", "os": "any", "layer": "base", "group": "Core", "desc": "yearly cost report script", "default": true},
-    {"path": "commands/create-prd.md", "mode": "symlink", "os": "any", "layer": "base", "group": "Commands", "desc": "generate a PRD from context", "default": true},
-    {"path": "commands/handoff.md", "mode": "symlink", "os": "any", "layer": "base", "group": "Commands", "desc": "structured session handoff", "default": true},
-    {"path": "commands/nuke.md", "mode": "symlink", "os": "any", "layer": "base", "group": "Commands", "desc": "arm sticky session-long max-effort nuke mode", "default": true},
-    {"path": "hooks/nuke.py", "mode": "symlink", "os": "any", "layer": "base", "group": "Hooks", "desc": "nuke mode hook: arm/inject directive, clear on session end", "default": true},
-    {"path": "skills/shannon", "mode": "symlink", "os": "any", "layer": "base", "group": "Skills", "desc": "autonomous pentester", "default": true}
+    {"path": "settings.json", "mode": "merge", "os": "any", "layer": "base", "group": "Core", "desc": "core Claude Code config: model, permissions, hooks, statusline, plugins (deep-merged)", "default": true, "required": true},
+    {"path": "settings.local.json.tmpl", "mode": "template", "os": "any", "layer": "base", "group": "Core", "desc": "per-machine permission allowlist (chmod/brew/ssh/scp/aws), templated per host", "default": true},
+    {"path": "statusline.sh", "mode": "symlink", "os": "any", "layer": "base", "group": "Core", "desc": "rich statusline: context bar, session/month/year cost, tokens, cache %, git branch", "default": true},
+    {"path": "monthly-cost.sh", "mode": "symlink", "os": "any", "layer": "base", "group": "Core", "desc": "current-month Claude spend via ccusage (cached) for the statusline", "default": true},
+    {"path": "yearly-cost.sh", "mode": "symlink", "os": "any", "layer": "base", "group": "Core", "desc": "year-to-date Claude spend via ccusage (cached) for the statusline", "default": true},
+    {"path": "commands/create-prd.md", "mode": "symlink", "os": "any", "layer": "base", "group": "Commands", "desc": "/create-prd: write a full PRD from the current conversation", "default": true},
+    {"path": "commands/handoff.md", "mode": "symlink", "os": "any", "layer": "base", "group": "Commands", "desc": "/handoff: exhaustive segmented handoff doc when context runs low", "default": true},
+    {"path": "commands/nuke.md", "mode": "symlink", "os": "any", "layer": "base", "group": "Commands", "desc": "/nuke: arm sticky session-long max-effort mode", "default": true},
+    {"path": "hooks/nuke.py", "mode": "symlink", "os": "any", "layer": "base", "group": "Hooks", "desc": "nuke-mode hook: re-inject the max-effort directive each turn, clear on session end", "default": true},
+    {"path": "skills/shannon", "mode": "symlink", "os": "any", "layer": "base", "group": "Skills", "desc": "/shannon: autonomous white-box web & API pentester skill", "default": true}
   ]
 }

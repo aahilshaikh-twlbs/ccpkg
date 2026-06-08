@@ -110,7 +110,36 @@ def _print_results(results):
         print("{0}\t{1}".format(path_rel, result))
 
 
-def _cmd_install(root, home, env, os_name, yes=False, reconfigure=False):
+def _all_ids(items, sels, overlay_present):
+    # every selectable id the picker would surface (files + plugins + mailbox).
+    from . import selection
+    out = set()
+    for stage in selection.build_stages(items, sels, overlay_present):
+        for e in stage.entries:
+            out.add(e.id)
+    return out
+
+
+def _preset_ids(items, sels, overlay_present, preset):
+    # Map a headless --preset name to a concrete id-set, mirroring the wizard's
+    # preset semantics: everything=all surfaced ids, recommended=default-on,
+    # minimal=required-only.
+    from . import selection
+    if preset == "everything":
+        return _all_ids(items, sels, overlay_present)
+    if preset == "minimal":
+        out = set()
+        for stage in selection.build_stages(items, sels, overlay_present):
+            for e in stage.entries:
+                if getattr(e, "required", False):
+                    out.add(e.id)
+        return out
+    # "recommended" (and any unknown value) -> the default-on set.
+    return selection.default_ids(items, sels, overlay_present)
+
+
+def _cmd_install(root, home, env, os_name, yes=False, reconfigure=False,
+                 preset=None):
     from . import manifest, selectables, selection, profile, wizard
 
     items = manifest.parse(config.manifest_path(root))
@@ -118,27 +147,33 @@ def _cmd_install(root, home, env, os_name, yes=False, reconfigure=False):
         env.get("OVERLAY_DIR") or env.get("OVERLAY_REPO")
     )
     prof = profile.load(home)
-    is_tty = (not yes) and _stdin_is_tty()
+    # A --preset selection is headless by definition: it names the id-set
+    # directly and skips both the wizard and the profile (like --yes).
+    is_tty = (not yes) and (preset is None) and _stdin_is_tty()
 
     def _run_wizard(stages, preselected):
         # `existing` drives the splash status line (re-run vs fresh install).
         return wizard.run_wizard(stages, preselected, existing=prof is not None)
 
-    try:
-        selected = selection.resolve_selection(
-            items, selectables.SELECTABLES, overlay_present,
-            profile_obj=prof, is_tty=is_tty, reconfigure=reconfigure,
-            run_wizard=_run_wizard,
-        )
-    except KeyboardInterrupt:
-        # Clean cancel from the wizard: nothing applied, nothing persisted.
-        print("install cancelled")
-        return 130
+    if preset is not None:
+        selected = _preset_ids(items, selectables.SELECTABLES,
+                               overlay_present, preset)
+    else:
+        try:
+            selected = selection.resolve_selection(
+                items, selectables.SELECTABLES, overlay_present,
+                profile_obj=prof, is_tty=is_tty, reconfigure=reconfigure,
+                run_wizard=_run_wizard,
+            )
+        except KeyboardInterrupt:
+            # Clean cancel from the wizard: nothing applied, nothing persisted.
+            print("install cancelled")
+            return 130
 
     # The WIZARD owns the profile: persist whenever it actually ran, i.e. any
     # interactive (TTY) session — re-runs now always reopen the picker, so the
-    # (possibly updated) selection is what we save. A headless run (--yes) or a
-    # plain profile replay must NOT (re)write it.
+    # (possibly updated) selection is what we save. A headless run (--yes /
+    # --preset) or a plain profile replay must NOT (re)write it.
     if is_tty:
         all_ids = selection.default_ids(
             items, selectables.SELECTABLES, overlay_present) | set(selected)
@@ -159,12 +194,40 @@ def _cmd_install(root, home, env, os_name, yes=False, reconfigure=False):
     _print_findings(report.scan_findings)
     for note in report.notes:
         print("note: {0}".format(note))
+
+    # Styled post-install recap — interactive TTY only, ADDITIVE to the plain
+    # output above. Guarded so a not-yet-landed wizard.render_summary can't
+    # crash the install.
+    if is_tty and _stdout_is_tty():
+        render = getattr(wizard, "render_summary", None)
+        if callable(render):
+            summary = {
+                "applied": list(report.base_applied) + list(report.overlay_applied),
+                "plugins": dict(report.plugins),
+                "mailbox": dict(report.mailbox),
+                "notes": list(report.notes),
+                "skipped": sorted(
+                    _all_ids(items, selectables.SELECTABLES, overlay_present)
+                    - set(selected)
+                ),
+            }
+            try:
+                render(summary, sys.stdout)
+            except Exception as exc:
+                print("note: summary render failed ({0})".format(exc))
     return 0
 
 
 def _stdin_is_tty():
     try:
         return bool(sys.stdin.isatty())
+    except Exception:
+        return False
+
+
+def _stdout_is_tty():
+    try:
+        return bool(sys.stdout.isatty())
     except Exception:
         return False
 
@@ -297,6 +360,12 @@ def _build_parser():
     p_install.add_argument("--reconfigure", dest="reconfigure",
                            action="store_true",
                            help="re-run the interactive wizard even if a profile exists")
+    p_install.add_argument("--preset", dest="preset",
+                           choices=["minimal", "recommended", "everything"],
+                           default=None,
+                           help="headless preset selection (skips the wizard): "
+                                "minimal=required only, recommended=default-on, "
+                                "everything=all installables")
     sub.add_parser("pull")
     p_push = sub.add_parser("push")
     p_push.add_argument("paths", nargs="*")
@@ -320,7 +389,8 @@ def main(argv=None):
     if args.cmd == "install":
         return _cmd_install(root, home, env, os_name,
                             yes=getattr(args, "yes", False),
-                            reconfigure=getattr(args, "reconfigure", False))
+                            reconfigure=getattr(args, "reconfigure", False),
+                            preset=getattr(args, "preset", None))
     if args.cmd == "pull":
         return _cmd_pull(root, home, env, os_name)
     if args.cmd == "push":

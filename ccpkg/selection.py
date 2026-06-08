@@ -16,6 +16,12 @@ class Entry:
     desc: str
     default: bool
     kind: str          # "file" | "plugin" | "mailbox"
+    # Metadata for the picker's per-item detail line + presets. All optional so
+    # existing positional Entry(id, desc, default, kind) construction still works.
+    path: str = ""     # repo-relative path (files); "" for plugins/mailbox
+    mode: str = ""     # symlink | template | merge (files); "" otherwise
+    required: bool = False  # essential — drives the Minimal preset / lock hint
+    scope: str = ""    # e.g. "user" for plugins
 
 
 @dataclass
@@ -40,10 +46,12 @@ def build_stages(items, sels, overlay_present):
         if it.layer == "overlay" and not overlay_present:
             continue
         buckets.setdefault(it.group, []).append(
-            Entry(id=it.path, desc=it.desc, default=it.default, kind="file"))
+            Entry(id=it.path, desc=it.desc, default=it.default, kind="file",
+                  path=it.path, mode=it.mode, required=it.required))
     for s in sels:
         buckets.setdefault(s.group, []).append(
-            Entry(id=s.id, desc=s.desc, default=s.default, kind=s.kind))
+            Entry(id=s.id, desc=s.desc, default=s.default, kind=s.kind,
+                  scope=("user" if s.kind == "plugin" else "")))
 
     stages = []
     for group in sorted(buckets, key=_order_key):
