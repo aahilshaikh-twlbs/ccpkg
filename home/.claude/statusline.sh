@@ -173,9 +173,20 @@ if [ -n "$cwd" ] && [ -d "$cwd" ]; then
     fi
 fi
 
+# 0. NUKE MODE INDICATOR — reads `ultracode` from settings.json; shows when armed.
+nuke_str=""
+nuke_settings_path="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
+if [ -f "$nuke_settings_path" ]; then
+    nuke_armed=$(jq -r '.ultracode // false' "$nuke_settings_path" 2>/dev/null)
+    if [ "$nuke_armed" = "true" ]; then
+        nuke_str=$(printf "${BOLD}${FG_RED}🔴 NUKE${RESET} ${FG_GRAY}/nuke off when done${RESET}")
+    fi
+fi
+
 # Assemble
 SEP=$(printf " ${FG_GRAY}|${RESET} ")
 parts=()
+[ -n "$nuke_str" ]   && parts+=("$nuke_str")
 parts+=("$model_str")
 parts+=("$ctx_str")
 [ -n "$cost_str" ]   && parts+=("$cost_str")
