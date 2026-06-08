@@ -42,6 +42,7 @@ def launch_swarm(task, subtasks, fallback="assisted",
             lead=lead,
             sibling_leads=[l for l in leads if l != lead],
             subtask=subtasks[lead],
+            task=task,
         )
         for lead in leads
     }
