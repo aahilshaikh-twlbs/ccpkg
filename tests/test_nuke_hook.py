@@ -136,3 +136,98 @@ def test_arm_without_session_id_still_works(tmp_path):
     proc = run_hook({"hook_event_name": "UserPromptSubmit", "prompt": "/nuke"}, tmp_path)
     assert proc.returncode == 0
     assert read_settings(tmp_path).get("ultracode") is True
+
+
+# ---- v3: bundle bypassPermissions + sidecar -----------------------------
+
+def sidecar(config_dir):
+    return Path(config_dir) / "nuke" / "prior.json"
+
+
+def read_sidecar(config_dir):
+    p = sidecar(config_dir)
+    return json.loads(p.read_text()) if p.exists() else None
+
+
+def write_settings(config_dir, data):
+    settings_file(config_dir).write_text(json.dumps(data))
+
+
+# ---- arm: bundle bypassPermissions ----
+
+def test_arm_sets_bypass_permissions_and_records_no_prior(tmp_path):
+    run_hook(ups("/nuke"), tmp_path)
+    data = read_settings(tmp_path)
+    assert data["ultracode"] is True
+    assert data["permissions"]["defaultMode"] == "bypassPermissions"
+    # No prior defaultMode existed -> sidecar records null.
+    assert read_sidecar(tmp_path) == {"defaultMode": None}
+
+
+def test_arm_records_prior_default_mode(tmp_path):
+    write_settings(tmp_path, {"permissions": {"defaultMode": "auto"}})
+    run_hook(ups("/nuke"), tmp_path)
+    data = read_settings(tmp_path)
+    assert data["permissions"]["defaultMode"] == "bypassPermissions"
+    assert read_sidecar(tmp_path) == {"defaultMode": "auto"}
+
+
+def test_arm_preserves_other_permissions_keys(tmp_path):
+    write_settings(tmp_path, {"permissions": {"defaultMode": "auto",
+                                              "allow": ["Bash(ls)"]}})
+    run_hook(ups("/nuke"), tmp_path)
+    data = read_settings(tmp_path)
+    assert data["permissions"]["defaultMode"] == "bypassPermissions"
+    assert data["permissions"]["allow"] == ["Bash(ls)"]  # untouched
+
+
+def test_rearm_is_idempotent_and_preserves_original_prior(tmp_path):
+    write_settings(tmp_path, {"permissions": {"defaultMode": "auto"}})
+    run_hook(ups("/nuke"), tmp_path)
+    # Second arm must NOT overwrite the sidecar with "bypassPermissions".
+    run_hook(ups("/nuke"), tmp_path)
+    assert read_sidecar(tmp_path) == {"defaultMode": "auto"}
+
+
+# ---- disarm: restore prior defaultMode ----
+
+def test_disarm_restores_prior_default_mode(tmp_path):
+    write_settings(tmp_path, {"permissions": {"defaultMode": "auto"}})
+    run_hook(ups("/nuke"), tmp_path)
+    run_hook(ups("/nuke off"), tmp_path)
+    data = read_settings(tmp_path)
+    assert "ultracode" not in data
+    assert data["permissions"]["defaultMode"] == "auto"
+    assert read_sidecar(tmp_path) is None  # cleared
+
+
+def test_disarm_deletes_default_mode_when_no_prior(tmp_path):
+    # No prior permissions block at all.
+    run_hook(ups("/nuke"), tmp_path)
+    run_hook(ups("/nuke off"), tmp_path)
+    data = read_settings(tmp_path)
+    assert "ultracode" not in data
+    # permissions.defaultMode must not linger (it was never there).
+    assert "permissions" not in data or "defaultMode" not in data["permissions"]
+    assert read_sidecar(tmp_path) is None
+
+
+def test_disarm_without_sidecar_leaves_default_mode_alone(tmp_path):
+    # Simulate the user manually setting "ultracode" without arming via the hook.
+    write_settings(tmp_path, {"ultracode": True,
+                              "permissions": {"defaultMode": "acceptEdits"}})
+    run_hook(ups("/nuke off"), tmp_path)
+    data = read_settings(tmp_path)
+    assert "ultracode" not in data
+    # No sidecar -> hook should not touch defaultMode.
+    assert data["permissions"]["defaultMode"] == "acceptEdits"
+
+
+def test_disarm_preserves_other_permissions_keys(tmp_path):
+    write_settings(tmp_path, {"permissions": {"defaultMode": "auto",
+                                              "allow": ["Bash(ls)"]}})
+    run_hook(ups("/nuke"), tmp_path)
+    run_hook(ups("/nuke off"), tmp_path)
+    data = read_settings(tmp_path)
+    assert data["permissions"]["defaultMode"] == "auto"
+    assert data["permissions"]["allow"] == ["Bash(ls)"]
