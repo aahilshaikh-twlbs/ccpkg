@@ -347,6 +347,56 @@ def _cmd_uninstall(root, home, env, os_name, yes=False):
     return 0
 
 
+def _cmd_new(root, home, env, os_name, kind, name, group, default):
+    # scaffold a new managed item: starter file + manifest entry.
+    from . import scaffold
+    try:
+        created = scaffold.create(root, kind, name, group=group, default=default)
+    except ValueError as exc:
+        print("error: {0}".format(exc), file=sys.stderr)
+        return 1
+    print("created:")
+    for p in created:
+        print("  {0}".format(p))
+    print("next: edit the new file and its 'desc' in manifest.json, then "
+          "`ccpkg pull` to link it into ~/.claude.")
+    return 0
+
+
+def _cmd_overlay(root, home, env, os_name, action, dir, repo, git):
+    # overlay init: scaffold a private overlay dir + wire it into local.env.
+    from . import overlay
+    if action != "init":
+        print("usage: ccpkg overlay init [--dir PATH] [--repo URL] [--git]",
+              file=sys.stderr)
+        return 2
+    dest = dir or os.path.join(config.user_config_dir(), "overlay")
+    le = config.localenv_path(root)
+    result = overlay.init(dest, le, repo=repo, do_git=git)
+    print("overlay\t{0}".format(result["dest"]))
+    if result.get("exists"):
+        print("note: existing manifest.json kept (not clobbered)")
+    for c in result["created"]:
+        print("created\t{0}".format(c))
+    print("localenv\t{0}\t({1})".format(le, result["localenv"]))
+    print("git\t{0}".format("initialized" if result["git"] else "skipped"))
+    print("note: add items with `ccpkg new`, then `ccpkg install`.")
+    return 0
+
+
+def _cmd_diff(root, home, env, os_name, item):
+    # diff = per-file CONTENT diff (expected -> live), complementing `status`.
+    from . import diff
+    try:
+        results = diff.compute(root, home, os_name, only=item)
+    except ValueError as exc:
+        print("ccpkg diff: {0}".format(exc), file=sys.stderr)
+        return 2
+    print(diff.render(results, only=item))
+    drifted = any(status != "ok" for _p, status, _d in results)
+    return 1 if drifted else 0
+
+
 def _build_parser():
     parser = argparse.ArgumentParser(prog="ccpkg")
     parser.add_argument(
@@ -376,6 +426,34 @@ def _build_parser():
     p_uninstall.add_argument("--yes", "--non-interactive", dest="yes",
                              action="store_true",
                              help="skip the confirmation prompt")
+
+    p_new = sub.add_parser("new",
+                           help="scaffold a new managed item (file + manifest entry)")
+    p_new.add_argument("kind", choices=["agent", "command", "hook", "skill"],
+                       help="agent | command | skill | hook")
+    p_new.add_argument("name", help="lowercase name matching ^[a-z0-9][a-z0-9-]*$")
+    p_new.add_argument("--group", default=None, help="override the manifest group")
+    g_new = p_new.add_mutually_exclusive_group()
+    g_new.add_argument("--default", dest="default", action="store_true",
+                       default=None, help="force default: true")
+    g_new.add_argument("--no-default", dest="default", action="store_false",
+                       help="force default: false")
+
+    p_overlay = sub.add_parser("overlay", help="manage the private overlay layer")
+    ov_sub = p_overlay.add_subparsers(dest="overlay_action")
+    p_ov_init = ov_sub.add_parser("init", help="scaffold + wire a private overlay")
+    p_ov_init.add_argument("--dir", dest="dir", default=None,
+                           help="overlay directory (default: <user_config_dir>/overlay)")
+    p_ov_init.add_argument("--repo", dest="repo", default=None,
+                           help="set OVERLAY_REPO=<url> instead of OVERLAY_DIR")
+    p_ov_init.add_argument("--git", dest="git", action="store_true",
+                           help="run `git init` in the new overlay directory")
+
+    p_diff = sub.add_parser("diff",
+                            help="content diff between the repo and live ~/.claude")
+    p_diff.add_argument("item", nargs="?", default=None,
+                        help="optional manifest path to diff one item "
+                             "(e.g. agents/debugger.md)")
     return parser
 
 
@@ -404,5 +482,17 @@ def main(argv=None):
     if args.cmd == "uninstall":
         return _cmd_uninstall(root, home, env, os_name,
                               yes=getattr(args, "yes", False))
+    if args.cmd == "new":
+        return _cmd_new(root, home, env, os_name, args.kind, args.name,
+                        getattr(args, "group", None),
+                        getattr(args, "default", None))
+    if args.cmd == "overlay":
+        return _cmd_overlay(root, home, env, os_name,
+                            action=getattr(args, "overlay_action", None),
+                            dir=getattr(args, "dir", None),
+                            repo=getattr(args, "repo", None),
+                            git=getattr(args, "git", False))
+    if args.cmd == "diff":
+        return _cmd_diff(root, home, env, os_name, getattr(args, "item", None))
     parser.print_help()
     return 2
