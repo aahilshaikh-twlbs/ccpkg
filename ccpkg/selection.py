@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Set
 
 # Stage display order. A group not listed here sorts last, alphabetically.
-STAGE_ORDER = ["Core", "Commands", "Skills", "Plugins", "Coordination", "Overlay"]
+STAGE_ORDER = ["Core", "Commands", "Skills", "Agents", "Plugins", "Coordination", "Overlay"]
 
 
 @dataclass
