@@ -232,3 +232,52 @@ def test_disarm_preserves_other_permissions_keys(tmp_path):
     data = read_settings(tmp_path)
     assert data["permissions"]["defaultMode"] == "auto"
     assert data["permissions"]["allow"] == ["Bash(ls)"]
+
+
+# ---- already-off / already-armed reporting ------------------------------
+
+def test_disarm_when_already_off_reports_already_off(tmp_path):
+    # Fresh env, never armed: /nuke off must say so rather than claim a disarm.
+    proc = run_hook(ups("/nuke off"), tmp_path)
+    assert proc.returncode == 0
+    assert "already off" in injected(proc)
+    assert "DISARMED" not in injected(proc)
+    assert "ultracode" not in read_settings(tmp_path)
+
+
+def test_disarm_when_off_preserves_other_settings(tmp_path):
+    # "Already off" path must be a no-op on the rest of settings.json.
+    write_settings(tmp_path, {"awsProfile": "prod"})
+    proc = run_hook(ups("/nuke off"), tmp_path)
+    assert "already off" in injected(proc)
+    assert read_settings(tmp_path) == {"awsProfile": "prod"}
+
+
+def test_disarm_with_leftover_sidecar_still_disarms(tmp_path):
+    # ultracode absent but a sidecar lingers (interrupted state): there IS
+    # something to undo, so disarm + restore, don't report "already off".
+    write_settings(tmp_path, {"permissions": {"defaultMode": "bypassPermissions"}})
+    sidecar(tmp_path).parent.mkdir(parents=True, exist_ok=True)
+    sidecar(tmp_path).write_text(json.dumps({"defaultMode": "auto"}))
+    proc = run_hook(ups("/nuke off"), tmp_path)
+    assert "DISARMED" in injected(proc)
+    assert read_settings(tmp_path)["permissions"]["defaultMode"] == "auto"
+    assert read_sidecar(tmp_path) is None
+
+
+def test_arm_when_already_armed_reports_already_armed(tmp_path):
+    write_settings(tmp_path, {"ultracode": True,
+                              "permissions": {"defaultMode": "bypassPermissions"}})
+    proc = run_hook(ups("/nuke"), tmp_path)
+    assert proc.returncode == 0
+    assert "already armed" in injected(proc)
+    assert read_settings(tmp_path).get("ultracode") is True
+
+
+def test_arm_when_already_armed_does_not_touch_sidecar(tmp_path):
+    # Already armed -> no _arm() call -> no sidecar clobber (idempotency).
+    write_settings(tmp_path, {"ultracode": True,
+                              "permissions": {"defaultMode": "bypassPermissions"}})
+    proc = run_hook(ups("/nuke"), tmp_path)
+    assert "already armed" in injected(proc)
+    assert read_sidecar(tmp_path) is None  # nothing written

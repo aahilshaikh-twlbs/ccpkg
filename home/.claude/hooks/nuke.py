@@ -42,6 +42,21 @@ DISARMED_MSG = (
     "session. Run `/effort auto` to lower this session now.\n"
     "</system-reminder>"
 )
+ALREADY_OFF_MSG = (
+    "<system-reminder>\n"
+    "⚪ NUKE MODE already off — `ultracode` was not set in settings, so "
+    "nothing changed. If the statusline still shows \U0001f534 NUKE, that is "
+    "THIS session's effort (CLAUDE_EFFORT=xhigh), not the persistent toggle; "
+    "run `/effort auto` to lower it now.\n"
+    "</system-reminder>"
+)
+ALREADY_ARMED_MSG = (
+    "<system-reminder>\n"
+    "\U0001f534 NUKE MODE already armed — `ultracode` is already set; nothing "
+    "changed. Active from your next session. For THIS session run "
+    "`/effort ultracode` if it is not already at xhigh.\n"
+    "</system-reminder>"
+)
 STANDING_MSG = (
     "<system-reminder>\n"
     "\U0001f534 NUKE MODE active — ultracode on (xhigh + dynamic workflows). "
@@ -180,11 +195,19 @@ def main():
         prompt = data.get("prompt") or ""
         intent = _intent(prompt)
         if intent == "arm":
-            _arm()
-            _emit(ARMED_MSG)
+            if _is_armed():
+                _emit(ALREADY_ARMED_MSG)
+            else:
+                _arm()
+                _emit(ARMED_MSG)
         elif intent == "disarm":
-            _disarm()
-            _emit(DISARMED_MSG)
+            # "Off" means nothing to undo: not armed AND no stashed perms to
+            # restore. Report it rather than claiming a disarm that did nothing.
+            if _is_armed() or _sidecar_load() is not None:
+                _disarm()
+                _emit(DISARMED_MSG)
+            else:
+                _emit(ALREADY_OFF_MSG)
         elif _is_armed():
             _emit(STANDING_MSG)
     except Exception:
