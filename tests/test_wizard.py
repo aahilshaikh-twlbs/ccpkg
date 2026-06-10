@@ -134,6 +134,38 @@ def test_render_raw_clips_descriptions_to_frame_width(monkeypatch):
     assert "…" in text
 
 
+def test_required_dims_group_scales_with_option_count():
+    stages = [Stage("Core", [Entry("a", "d", True, "file"),
+                             Entry("b", "d", True, "file"),
+                             Entry("c", "d", True, "file")])]
+    st = wizard.WizardState(stages, set())
+    st.begin()
+    cols, rows = wizard._required_dims(st)
+    assert cols == wizard._MIN_COLS
+    assert rows == wizard._GROUP_CHROME_ROWS + 3 + 1
+
+
+def test_render_too_small_colors_deficient_red_and_ok_green():
+    out = io.StringIO()
+    pal = wizard._Palette(enabled=True)
+    wizard._render_too_small(out, 64, 63, 80, 24, pal)
+    text = out.getvalue()
+    assert "Terminal size too small:" in text
+    assert "Needed for current config:" in text
+    assert "Width = 80 Height = 24" in text   # target line (plain text inside bold)
+    assert "\x1b[31m64\x1b[0m" in text         # width deficient (64<80) -> red
+    assert "\x1b[32m63\x1b[0m" in text         # height ok (63>=24) -> green
+
+
+def test_render_too_small_plain_content():
+    out = io.StringIO()
+    pal = wizard._Palette(enabled=False)
+    wizard._render_too_small(out, 50, 10, 80, 24, pal)
+    text = out.getvalue()
+    assert "Width = 50 Height = 10" in text
+    assert "Width = 80 Height = 24" in text
+
+
 def test_render_raw_uses_bracketed_checkbox(monkeypatch):
     monkeypatch.setattr(wizard, "_color_enabled", lambda out: False)
     st = wizard.WizardState(_stages(), {"settings.json"})

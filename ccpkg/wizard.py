@@ -292,6 +292,9 @@ class _Palette:
     def warn(self, s):    # yellow
         return self._w("33", s)
 
+    def bad(self, s):     # red
+        return self._w("31", s)
+
 
 def _make_palette(out):
     # type: (object) -> _Palette
@@ -328,6 +331,66 @@ def _left_margin(width):
     except Exception:
         cols = width
     return " " * max(0, (cols - width) // 2)
+
+
+# Below these the framed wizard can't render without overflow/scroll, so we show
+# a "terminal too small" guard instead (like a TUI's resize gate). Width is fixed
+# (the hint line + frame need ~80 cols); height is per-screen — one row per option
+# plus fixed chrome — so the tallest group drives it.
+_MIN_COLS = 80
+_GROUP_CHROME_ROWS = 11   # non-option lines in _render_raw (top/header/hint/detail/footer + blanks)
+_OTHER_SCREEN_ROWS = 14   # intro / preset / review all fit within this
+
+
+def _terminal_dims():
+    # type: () -> Tuple[int, int]
+    """(columns, lines) of the controlling terminal, with an 80x24 fallback."""
+    try:
+        ts = shutil.get_terminal_size((80, 24))
+        return ts.columns, ts.lines
+    except Exception:
+        return 80, 24
+
+
+def _required_dims(state):
+    # type: (WizardState) -> Tuple[int, int]
+    """(cols, rows) the current screen needs to render without overflow/scroll.
+    The option screen needs one row per entry plus fixed chrome (+1 so the top
+    bar stays put); the intro/preset/review screens are short and fixed."""
+    on_group = not (state.is_intro() or state.is_preset() or state.is_review())
+    if on_group:
+        rows = _GROUP_CHROME_ROWS + len(state.current_stage().entries) + 1
+    else:
+        rows = _OTHER_SCREEN_ROWS
+    return _MIN_COLS, rows
+
+
+def _render_too_small(out, cur_w, cur_h, need_w, need_h, pal=None):
+    # type: (object, int, int, int, int, object) -> None
+    """A centered 'terminal too small' guard. The deficient dimension is shown in
+    red and the satisfied one in green, with the target dims below, so the user
+    knows exactly how far to drag the window."""
+    if pal is None:
+        pal = _make_palette(out)
+    cols = cur_w if cur_w > 0 else need_w
+    w_col = pal.sel if cur_w >= need_w else pal.bad
+    h_col = pal.sel if cur_h >= need_h else pal.bad
+
+    def line(plain, colored):
+        pad = " " * max(0, (cols - len(plain)) // 2)
+        out.write(pad + colored + "\r\n")
+
+    out.write(_CLEAR)
+    out.write("\r\n" * max(0, cur_h // 2 - 3))
+    line("Terminal size too small:", pal.bold("Terminal size too small:"))
+    line("  Width = %d Height = %d" % (cur_w, cur_h),
+         "  " + pal.bold("Width = ") + w_col(str(cur_w)) + " "
+         + pal.bold("Height = ") + h_col(str(cur_h)))
+    out.write("\r\n")
+    line("Needed for current config:", pal.bold("Needed for current config:"))
+    line("  Width = %d Height = %d" % (need_w, need_h),
+         "  " + pal.bold("Width = %d Height = %d" % (need_w, need_h)))
+    out.flush()
 
 
 def _entry_meta(e):
@@ -772,6 +835,18 @@ def _raw_mode_loop(stages, preselected, in_stream, out_stream, existing=False):
     try:
         tty.setraw(fd)
         while not state.is_done():
+            need_w, need_h = _required_dims(state)
+            cur_w, cur_h = _terminal_dims()
+            if cur_w < need_w or cur_h < need_h:
+                _render_too_small(out_stream, cur_w, cur_h, need_w, need_h)
+                # Poll so the guard clears within ~250ms of a resize, while still
+                # letting Esc / q / Ctrl-C / EOF abort.
+                r, _, _ = select.select([fd], [], [], 0.25)
+                if r:
+                    key = _read_key(in_stream)
+                    if key in ("", "ctrl-c", "esc", "q"):
+                        raise KeyboardInterrupt
+                continue
             if state.is_intro():
                 _render_intro_raw(state, out_stream)
             elif state.is_preset():
