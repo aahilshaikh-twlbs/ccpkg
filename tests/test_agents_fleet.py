@@ -21,7 +21,7 @@ def _frontmatter_name(text):
     return m.group(1)
 
 
-def test_fleet_has_38_optin_base_symlink_items():
+def test_fleet_has_38_base_symlink_items():
     items = _agent_items()
     assert len(items) == 38
     for i in items:
@@ -29,7 +29,17 @@ def test_fleet_has_38_optin_base_symlink_items():
         assert i.mode == "symlink"
         assert i.os == "any"
         assert i.desc.strip(), "{0} has empty desc".format(i.path)
-        assert i.default is False, "{0} should be opt-in".format(i.path)
+
+
+def test_recommended_core_agents_are_default_on():
+    core = {"agents/debugger.md", "agents/reviewer.md", "agents/architect.md",
+            "agents/tester.md", "agents/refactor.md", "agents/researcher.md",
+            "agents/implementer.md"}
+    items = _agent_items()
+    on = {i.path for i in items if i.default}
+    assert on == core, "default-on set drifted: {0}".format(sorted(on))
+    # everything else stays opt-in
+    assert all(i.default is False for i in items if i.path not in core)
 
 
 def test_every_item_has_a_file_with_matching_bare_name():
