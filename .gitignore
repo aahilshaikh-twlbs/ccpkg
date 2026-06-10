@@ -32,3 +32,6 @@ private/
 handoffs/
 # internal design docs (plans/specs — live in the private overlay, never commit; see docs/README.md)
 docs/superpowers/
+# macOS cruft
+.DS_Store
+**/.DS_Store
