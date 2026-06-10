@@ -356,6 +356,21 @@ def _name_col_width(entries, gutter=4):
     return max(len(e.id) for e in entries) + gutter
 
 
+def _clip(s, max_cols):
+    # type: (str, int) -> str
+    """Truncate s to at most max_cols display columns, marking elision with '…'.
+    Descriptions/metadata are plain text (one char == one column here), so a
+    slice is accurate. Returns '' when there is no room at all. Keeps row content
+    inside the framed width so it never spills past the top-bar's right corner."""
+    if max_cols <= 0:
+        return ""
+    if len(s) <= max_cols:
+        return s
+    if max_cols == 1:
+        return "…"
+    return s[:max_cols - 1] + "…"
+
+
 def _emit_top(out, title, crumb, width, pal, margin=""):
     # type: (object, str, str, int, _Palette, str) -> None
     """Top rule: ┌─ <title> ──────── <crumb> ─┐ spanning `width` columns,
@@ -683,6 +698,10 @@ def _render_raw(state, out):
     out.write(m + "  %s\r\n" % hint)
     out.write(m + "\r\n")
     col = _name_col_width(stage.entries)
+    # The fixed prefix left of the description is " " + pointer + " " + "[ ]" +
+    # " " + name + " " == col + 8 visible columns; clip each description to what
+    # remains inside the `width`-column frame so it never overruns the top bar.
+    desc_w = width - col - 8
     for i, e in enumerate(stage.entries):
         is_cur = (i == state.cursor)
         sel = state.is_selected(e.id)
@@ -690,7 +709,8 @@ def _render_raw(state, out):
         box = pal.selbold(_CHECK_ON) if sel else pal.dim(_CHECK_OFF)
         name = "%-*s" % (col, e.id)
         name = pal.bold(name) if is_cur else name
-        out.write(m + " %s %s %s %s\r\n" % (pointer, box, name, pal.dim(e.desc)))
+        out.write(m + " %s %s %s %s\r\n"
+                  % (pointer, box, name, pal.dim(_clip(e.desc, desc_w))))
     # Detail line for the highlighted entry: its description plus metadata
     # (path · mode for files, plugin · scope for plugins) so the cursor's
     # purpose and what it contributes are obvious at a glance.
@@ -698,6 +718,8 @@ def _render_raw(state, out):
         cur = stage.entries[state.cursor]
         meta = _entry_meta(cur)
         detail = cur.desc + ((" · " + meta) if meta else "")
+        # Prefix is "  " + pointer + " " == 4 visible columns; keep it framed.
+        detail = _clip(detail, width - 4)
         out.write(m + "\r\n")
         out.write(m + "  %s %s\r\n" % (pal.accent(_POINTER), pal.dim(detail)))
     out.write(m + "\r\n")

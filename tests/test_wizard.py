@@ -108,6 +108,32 @@ def test_render_raw_aligns_descriptions_for_long_ids(monkeypatch):
     assert lines[0].index("DESC_A") == lines[1].index("DESC_B")
 
 
+def test_render_raw_clips_descriptions_to_frame_width(monkeypatch):
+    # Long descriptions must not spill past the top-bar frame (`width` columns),
+    # at any terminal size. Pin width + margin so the bound is deterministic.
+    monkeypatch.setattr(wizard, "_color_enabled", lambda out: False)
+    monkeypatch.setattr(wizard, "_term_width", lambda out: 60)
+    monkeypatch.setattr(wizard, "_left_margin", lambda width: "")
+    longdesc = "D" * 200
+    stages = [Stage("Core", [
+        Entry("settings.json", longdesc, True, "file"),
+        Entry("statusline.sh", "short one", True, "file")])]
+    st = wizard.WizardState(stages, set())
+    st.begin()
+    out = io.StringIO()
+    wizard._render_raw(st, out)
+    text = out.getvalue()
+    # Entry rows (carry a checkbox) and the cursor's detail line (a pointer, no
+    # checkbox) are the variable-width content we clip; none may exceed width.
+    rows = [ln for ln in text.split("\r\n") if "[✓]" in ln or "[ ]" in ln]
+    details = [ln for ln in text.split("\r\n") if "▸" in ln and "[" not in ln]
+    assert rows, "no entry rows rendered"
+    for ln in rows + details:
+        assert len(ln) <= 60, "content exceeds frame (%d): %r" % (len(ln), ln)
+    # the over-long description was elided with the marker
+    assert "…" in text
+
+
 def test_render_raw_uses_bracketed_checkbox(monkeypatch):
     monkeypatch.setattr(wizard, "_color_enabled", lambda out: False)
     st = wizard.WizardState(_stages(), {"settings.json"})
