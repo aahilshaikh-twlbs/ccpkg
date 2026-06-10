@@ -142,7 +142,8 @@ def test_required_dims_group_scales_with_option_count():
     st.begin()
     cols, rows = wizard._required_dims(st)
     assert cols == wizard._MIN_COLS
-    assert rows == wizard._GROUP_CHROME_ROWS + 3 + 1
+    # chrome + one row per option (3) + wrapped detail lines (short desc -> 1) + 1 safety
+    assert rows == wizard._GROUP_CHROME_ROWS + 3 + 1 + 1
 
 
 def test_render_too_small_colors_deficient_red_and_ok_green():
@@ -341,9 +342,13 @@ def test_raw_mode_loop_aborts_on_eof():
     slave_f = os.fdopen(slave, "r")
     out = io.StringIO()
     os.close(master)  # reads on the slave now hit EOF (or EIO)
+    import termios
 
     def _run():
-        with pytest.raises((KeyboardInterrupt, OSError)):
+        # Linux: a closed-master slave makes tcgetattr fail with EIO
+        # (termios.error, which is NOT an OSError); macOS reaches the prompt and
+        # hits EOF -> KeyboardInterrupt. Either way the loop aborts (no spin).
+        with pytest.raises((KeyboardInterrupt, OSError, termios.error)):
             wizard._raw_mode_loop(_stages(), set(), slave_f, out)
 
     try:

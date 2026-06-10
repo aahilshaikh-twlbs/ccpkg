@@ -9,6 +9,7 @@ import random
 import select
 import shutil
 import sys
+import textwrap
 from typing import List, Optional, Set
 
 from .selection import Stage
@@ -338,7 +339,7 @@ def _left_margin(width):
 # (the hint line + frame need ~80 cols); height is per-screen — one row per option
 # plus fixed chrome — so the tallest group drives it.
 _MIN_COLS = 80
-_GROUP_CHROME_ROWS = 11   # non-option lines in _render_raw (top/header/hint/detail/footer + blanks)
+_GROUP_CHROME_ROWS = 10   # fixed lines around the list + detail (top/header/hint/footer + blanks)
 _OTHER_SCREEN_ROWS = 14   # intro / preset / review all fit within this
 
 
@@ -358,10 +359,18 @@ def _required_dims(state):
     The option screen needs one row per entry plus fixed chrome (+1 so the top
     bar stays put); the intro/preset/review screens are short and fixed."""
     on_group = not (state.is_intro() or state.is_preset() or state.is_review())
-    if on_group:
-        rows = _GROUP_CHROME_ROWS + len(state.current_stage().entries) + 1
-    else:
-        rows = _OTHER_SCREEN_ROWS
+    if not on_group:
+        return _MIN_COLS, _OTHER_SCREEN_ROWS
+    entries = state.current_stage().entries
+    detail_rows = 1
+    if entries:
+        cur = entries[state.cursor]
+        meta = _entry_meta(cur)
+        detail = cur.desc + ((" · " + meta) if meta else "")
+        detail_rows = max(1, len(textwrap.wrap(detail, max(8, _MIN_COLS - 4))))
+    # fixed chrome + one row per option + the wrapped detail lines + 1 (keep the
+    # top bar from scrolling off).
+    rows = _GROUP_CHROME_ROWS + len(entries) + detail_rows + 1
     return _MIN_COLS, rows
 
 
@@ -781,10 +790,15 @@ def _render_raw(state, out):
         cur = stage.entries[state.cursor]
         meta = _entry_meta(cur)
         detail = cur.desc + ((" · " + meta) if meta else "")
-        # Prefix is "  " + pointer + " " == 4 visible columns; keep it framed.
-        detail = _clip(detail, width - 4)
+        # List rows are clipped for scannability; show the FULL highlighted
+        # description here, word-wrapped within the frame — this is the "read
+        # more". Prefix is 4 visible cols ("  " + pointer + " "); continuation
+        # lines indent 4 to align under the text.
+        wrapped = textwrap.wrap(detail, max(8, width - 4)) or [""]
         out.write(m + "\r\n")
-        out.write(m + "  %s %s\r\n" % (pal.accent(_POINTER), pal.dim(detail)))
+        out.write(m + "  %s %s\r\n" % (pal.accent(_POINTER), pal.dim(wrapped[0])))
+        for cont in wrapped[1:]:
+            out.write(m + "    %s\r\n" % pal.dim(cont))
     out.write(m + "\r\n")
     _emit_footer(out, "[ esc back ]", "[ ⏎ continue → ]", width, pal, m)
     out.flush()
