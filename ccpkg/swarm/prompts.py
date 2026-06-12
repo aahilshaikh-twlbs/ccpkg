@@ -3,14 +3,14 @@
 The kickoff is a SINGLE LINE injected into the lead's REPL: iTerm's `write text`
 submits on every embedded newline, so a multi-line kickoff would fire partial
 prompts (Probe 2 finding). All real instruction lives in inbox.md, which the
-lead reads. The lead invokes the mailbox CLI by its absolute path
-(`~/.claude/mailbox/mailbox`) because `mailbox` is not on $PATH, and `send`
+lead reads. The lead invokes the mboard CLI by its absolute path
+(`~/.claude/mboard/mboard`) because `mboard` is not on $PATH, and `send`
 routes to the session's primary board implicitly (there is no --board flag).
 """
 
-# Absolute path to the mailbox CLI — `mailbox` is not on $PATH anywhere; the only
+# Absolute path to the mboard CLI — `mboard` is not on $PATH anywhere; the only
 # entry point is this symlink (-> opt-prefixed homebrew libexec).
-MAILBOX = "~/.claude/mailbox/mailbox"
+MBOARD = "~/.claude/mboard/mboard"
 
 KICKOFF_TEMPLATE = (
     "You are swarm lead {lead} on swarm {swarm_id}. Read {inbox_path} now and "
@@ -54,7 +54,7 @@ launch you:
 
 1. Decompose your sub-task along its natural seams.
 2. `TeamCreate` a team, then spawn one focused teammate per seam with the `Agent`
-   tool (`run_in_background`), and coordinate them via the mailbox.
+   tool (`run_in_background`), and coordinate them via the mboard.
 3. Synthesize their outputs into your result.
 
 Only skip the team and do the work yourself if the sub-task is genuinely atomic
@@ -66,15 +66,15 @@ not swarms).
 ## Coordination
 
 You share the repo board with the orchestrator and your sibling leads. Use
-`{mailbox} send` / `{mailbox} inbox` to coordinate (the bare `mailbox` command is
+`{mboard} send` / `{mboard} inbox` to coordinate (the bare `mboard` command is
 not on PATH — always use that absolute path). File claims are auto-enforced via
-the mailbox PreToolUse hook, so avoid clobbering siblings.
+the mboard PreToolUse hook, so avoid clobbering siblings.
 
 ## Done signal
 
 When you finish, write your result to $SWARM_WORKDIR/result.md and run:
 
-  {mailbox} send --kind swarm_done \\
+  {mboard} send --kind swarm_done \\
     '{{"lead": "{lead}", "status": "ok", "result_path": "'$SWARM_WORKDIR'/result.md"}}'
 
 (`send` posts to your primary board swarm-{swarm_id} automatically — it takes no
@@ -90,5 +90,5 @@ def inbox_body(swarm_id, lead, sibling_leads, subtask, task):
         siblings=siblings,
         subtask=subtask,
         task=task,
-        mailbox=MAILBOX,
+        mboard=MBOARD,
     )

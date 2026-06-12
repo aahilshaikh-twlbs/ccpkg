@@ -51,12 +51,12 @@ def test_launches_one_tab_per_subtask_and_returns_swarm_id(monkeypatch, tmp_path
     )
     assert len(spawn_calls) == 2
     assert len(inject_calls) == 2
-    # Each spawn must set SWARM_LEAD, SWARM_ID, SWARM_WORKDIR, MAILBOX_BOARD
+    # Each spawn must set SWARM_LEAD, SWARM_ID, SWARM_WORKDIR, MBOARD_BOARD
     for c in spawn_calls:
         e = c["env"]
         assert e["SWARM_ID"] == sid
         assert e["SWARM_LEAD"] in {"lead-1", "lead-2"}
-        assert e["MAILBOX_BOARD"] == "swarm-" + sid
+        assert e["MBOARD_BOARD"] == "swarm-" + sid
         assert "SWARM_WORKDIR" in e
         # leads must launch in the orchestrator's repo, not the active tab's cwd
         assert c["cwd"] is not None
@@ -86,5 +86,5 @@ def test_falls_back_to_b_assisted_when_osascript_fails(monkeypatch, tmp_path, ca
     )
     out = capsys.readouterr().out
     # B-assisted mode prints ready-to-paste commands for each lead.
-    assert "MAILBOX_BOARD=swarm-" in out
+    assert "MBOARD_BOARD=swarm-" in out
     assert "claude --dangerously-skip-permissions" in out

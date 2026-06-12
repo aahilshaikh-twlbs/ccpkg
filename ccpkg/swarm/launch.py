@@ -57,8 +57,8 @@ def launch_swarm(task, subtasks, fallback="assisted",
 
     for lead in leads:
         env = {
-            "MAILBOX_LABEL": f"swarm-{swarm_id}-{lead}",
-            "MAILBOX_BOARD": swarm_board,
+            "MBOARD_LABEL": f"swarm-{swarm_id}-{lead}",
+            "MBOARD_BOARD": swarm_board,
             "SWARM_ID": swarm_id,
             "SWARM_LEAD": lead,
             "SWARM_WORKDIR": workdir.lead_dir(swarm_id, lead),

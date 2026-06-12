@@ -4,7 +4,7 @@ from ccpkg.swarm import lifecycle
 
 
 class DaemonFake:
-    """Models the REAL mailbox daemon contract (mailbox/src/mailbox/engine.py):
+    """Models the REAL mboard daemon contract (mboard/src/mboard/engine.py):
 
     - `ps`/`poll_inbox` require a `session_id` and derive boards from THAT
       session's own presence; they ignore a `board` kwarg (protocol.py strips
@@ -78,20 +78,20 @@ class DaemonFake:
 
 def test_wait_for_presence_returns_when_active(monkeypatch):
     fake = DaemonFake()
-    monkeypatch.setattr(lifecycle, "_mailbox_client", lambda: fake)
+    monkeypatch.setattr(lifecycle, "_mboard_client", lambda: fake)
     fake.add_lead_presence("abc", "lead-1", status="active")
     assert lifecycle.wait_for_presence("abc", "lead-1", timeout=1) is True
 
 
 def test_wait_for_presence_times_out_when_no_presence(monkeypatch):
     fake = DaemonFake()
-    monkeypatch.setattr(lifecycle, "_mailbox_client", lambda: fake)
+    monkeypatch.setattr(lifecycle, "_mboard_client", lambda: fake)
     assert lifecycle.wait_for_presence("abc", "lead-1", timeout=0.5) is False
 
 
 def test_wait_for_presence_ignores_stale_lead(monkeypatch):
     fake = DaemonFake()
-    monkeypatch.setattr(lifecycle, "_mailbox_client", lambda: fake)
+    monkeypatch.setattr(lifecycle, "_mboard_client", lambda: fake)
     fake.add_lead_presence("abc", "lead-1", status="stale")
     assert lifecycle.wait_for_presence("abc", "lead-1", timeout=0.5) is False
 
@@ -109,14 +109,14 @@ def test_orchestrator_joins_swarm_board_before_polling(monkeypatch):
         return orig(op, args)
 
     fake.request = spy
-    monkeypatch.setattr(lifecycle, "_mailbox_client", lambda: fake)
+    monkeypatch.setattr(lifecycle, "_mboard_client", lambda: fake)
     lifecycle.wait_for_presence("abc", "lead-1", timeout=0.3)
     assert any(j.get("board_name") == "swarm-abc" for j in joins)
 
 
 def test_poll_done_returns_swarm_done_messages(monkeypatch):
     fake = DaemonFake()
-    monkeypatch.setattr(lifecycle, "_mailbox_client", lambda: fake)
+    monkeypatch.setattr(lifecycle, "_mboard_client", lambda: fake)
     fake.add_done("abc", "lead-1", result_path="/tmp/a")
     dones = lifecycle.poll_done("abc")
     assert len(dones) == 1
@@ -126,14 +126,14 @@ def test_poll_done_returns_swarm_done_messages(monkeypatch):
 
 def test_poll_done_ignores_non_done_kinds(monkeypatch):
     fake = DaemonFake()
-    monkeypatch.setattr(lifecycle, "_mailbox_client", lambda: fake)
+    monkeypatch.setattr(lifecycle, "_mboard_client", lambda: fake)
     fake.add_done("abc", "lead-1", kind="note")  # not a swarm_done
     assert lifecycle.poll_done("abc") == []
 
 
 def test_wait_for_all_collects_all_then_returns(monkeypatch):
     fake = DaemonFake()
-    monkeypatch.setattr(lifecycle, "_mailbox_client", lambda: fake)
+    monkeypatch.setattr(lifecycle, "_mboard_client", lambda: fake)
     stage = {"n": 0}
 
     def step(_):
@@ -150,7 +150,7 @@ def test_wait_for_all_collects_all_then_returns(monkeypatch):
 
 def test_wait_for_all_times_out_with_partial_results(monkeypatch):
     fake = DaemonFake()
-    monkeypatch.setattr(lifecycle, "_mailbox_client", lambda: fake)
+    monkeypatch.setattr(lifecycle, "_mboard_client", lambda: fake)
     fake.add_done("abc", "lead-1", result_path="/r1")
     results = lifecycle.wait_for_all("abc", ["lead-1", "lead-2"], timeout=0.5,
                                      poll_interval=0.1)

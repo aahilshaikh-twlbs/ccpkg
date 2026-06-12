@@ -33,7 +33,7 @@ Write the document in this exact order:
 - Current overall status in 3–5 bullets
 - Map of segments below, each with a one-line "hand this to a session if you need to: …"
 - Global conventions, constraints, and hard-won gotchas that apply everywhere
-- **Mailbox board:** `MAILBOX_BOARD=handoff-<YYYY-MM-DD>-<topic-slug>` — the shared coordination board every spawned session joins. State the exact slug here so each segment's bootstrap can reference it. (See "Mailbox coordination (multi-session)" below.)
+- **Mboard board:** `MBOARD_BOARD=handoff-<YYYY-MM-DD>-<topic-slug>` — the shared coordination board every spawned session joins. State the exact slug here so each segment's bootstrap can reference it. (See "Mboard coordination (multi-session)" below.)
 
 ## §1 — <Workstream title>
 Status: <not-started | in-progress | blocked | done-pending-verification>
@@ -71,41 +71,41 @@ Exact commands, error messages, config snippets, or API contracts worth quoting 
 - **Preserve reasoning.** A future session should understand not just the current state but why decisions were made, so it doesn't re-litigate settled questions or repeat dead-ends.
 - **No filler.** Every line should earn its place in a context-constrained resume.
 
-## Mailbox coordination (multi-session)
+## Mboard coordination (multi-session)
 
-When this handoff fans work out to **more than one** fresh session, those sessions are otherwise blind to each other and will clobber each other's files. Mailbox (the ambient cross-session coordinator installed under `~/.claude/mailbox`) makes the fan-out safe: every session that joins the same board sees the others' presence, holds file claims, and exchanges coordination messages. Wire it into the handoff as follows.
+When this handoff fans work out to **more than one** fresh session, those sessions are otherwise blind to each other and will clobber each other's files. Mboard (the ambient cross-session coordinator installed under `~/.claude/mboard`) makes the fan-out safe: every session that joins the same board sees the others' presence, holds file claims, and exchanges coordination messages. Wire it into the handoff as follows.
 
 ### 1. Mint one shared board for the whole handoff
-Pick a board slug of the form `handoff-<YYYY-MM-DD>-<topic-slug>` (e.g. `handoff-2026-06-03-auth-refactor`). Use today's date and a short kebab-case topic. Record this exact slug in **§0 — Orientation** (the "Mailbox board" bullet). All segments share this one board so they can coordinate; per-segment isolation comes from non-overlapping **claims**, not from separate boards.
+Pick a board slug of the form `handoff-<YYYY-MM-DD>-<topic-slug>` (e.g. `handoff-2026-06-03-auth-refactor`). Use today's date and a short kebab-case topic. Record this exact slug in **§0 — Orientation** (the "Mboard board" bullet). All segments share this one board so they can coordinate; per-segment isolation comes from non-overlapping **claims**, not from separate boards.
 
 ### 2. Give every segment a bootstrap block
 At the top of each segment that will be handed to its own session, include a fenced `bash` block titled "Bootstrap (run first)" with these exact commands, filled in for that segment:
 
 ```bash
-# Bootstrap (run first) — joins the shared Mailbox board and stakes this segment's territory
-export MAILBOX_BOARD=handoff-<YYYY-MM-DD>-<topic-slug>   # so SessionStart auto-joins the board
-# SessionStart reads MAILBOX_BOARD only at session start. On a freshly spawned session the
+# Bootstrap (run first) — joins the shared Mboard board and stakes this segment's territory
+export MBOARD_BOARD=handoff-<YYYY-MM-DD>-<topic-slug>   # so SessionStart auto-joins the board
+# SessionStart reads MBOARD_BOARD only at session start. On a freshly spawned session the
 # export above is enough. If you paste this into an ALREADY-running session (SessionStart
 # already fired), run the next line to join the board now:
-mailbox join --board handoff-<YYYY-MM-DD>-<topic-slug>   # idempotent; no-op if already joined
-mailbox claim <glob1> <glob2> --note "<segment title>"   # stake this segment's files
-mailbox ps                                               # see who else is on the board
+mboard join --board handoff-<YYYY-MM-DD>-<topic-slug>   # idempotent; no-op if already joined
+mboard claim <glob1> <glob2> --note "<segment title>"   # stake this segment's files
+mboard ps                                               # see who else is on the board
 ```
 
-- `export MAILBOX_BOARD=<slug>` MUST use the **same slug** recorded in §0 for every segment.
-- The globs passed to `mailbox claim` MUST be exactly this segment's **"Files & key locations"** paths — that section doubles as the claim scope. Claims across segments MUST NOT overlap (that is what keeps the sessions from colliding).
+- `export MBOARD_BOARD=<slug>` MUST use the **same slug** recorded in §0 for every segment.
+- The globs passed to `mboard claim` MUST be exactly this segment's **"Files & key locations"** paths — that section doubles as the claim scope. Claims across segments MUST NOT overlap (that is what keeps the sessions from colliding).
 - The `--note` text should name the segment so a colliding session sees who holds the path and why.
 
 ### 3. Coordinate during the work, do not pre-claim
-We do **NOT** pre-create owner-less claims in the handoff doc — each session claims its own territory on bootstrap (step 2), so the claim is owned by a live session and is released cleanly when that session leaves. During the work, instruct each segment to coordinate via the `mailbox` CLI rather than guessing:
+We do **NOT** pre-create owner-less claims in the handoff doc — each session claims its own territory on bootstrap (step 2), so the claim is owned by a live session and is released cleanly when that session leaves. During the work, instruct each segment to coordinate via the `mboard` CLI rather than guessing:
 
-- `mailbox ps` — who else is active on the board and where.
-- `mailbox inbox` — read coordination messages addressed to you (also surfaced automatically after tool use / prompts).
-- `mailbox send --to <label|*> --kind <note|release-request|dep-signal|handoff|done> "<body>"` — signal another session. Use `note` for general coordination, `dep-signal` for "my work needs your X first", `handoff` to pass a unit on, and `done` when a unit is finished.
-- If blocked on a file another session holds, prefer `mailbox request-release <path>` — it finds the current holder and sends them a `release-request` message for you (you do NOT need to know the holder's label, and you do NOT send the `release-request` kind manually). Use `mailbox seize <path>` only if the holder is stale/offline.
+- `mboard ps` — who else is active on the board and where.
+- `mboard inbox` — read coordination messages addressed to you (also surfaced automatically after tool use / prompts).
+- `mboard send --to <label|*> --kind <note|release-request|dep-signal|handoff|done> "<body>"` — signal another session. Use `note` for general coordination, `dep-signal` for "my work needs your X first", `handoff` to pass a unit on, and `done` when a unit is finished.
+- If blocked on a file another session holds, prefer `mboard request-release <path>` — it finds the current holder and sends them a `release-request` message for you (you do NOT need to know the holder's label, and you do NOT send the `release-request` kind manually). Use `mboard seize <path>` only if the holder is stale/offline.
 
 ### 4. Add a one-line pointer to §0
-In the §0 segment map, after listing the segments, add: "All sessions: run your segment's Bootstrap block first (it joins board `handoff-<YYYY-MM-DD>-<topic-slug>` and claims your files); coordinate via `mailbox ps|inbox|send`."
+In the §0 segment map, after listing the segments, add: "All sessions: run your segment's Bootstrap block first (it joins board `handoff-<YYYY-MM-DD>-<topic-slug>` and claims your files); coordinate via `mboard ps|inbox|send`."
 
 ## Output
 

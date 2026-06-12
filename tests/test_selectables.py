@@ -1,16 +1,16 @@
 from ccpkg import selectables
 
 
-def test_selectables_cover_plugins_and_mailbox():
+def test_selectables_cover_plugins_and_mboard():
     by_id = {s.id: s for s in selectables.SELECTABLES}
     assert {"superpowers", "frontend-design", "understand-anything"} <= set(by_id)
-    assert "mailbox" in by_id
+    assert "mboard" in by_id
 
 
 def test_plugin_selectables_have_plugin_kind():
     for s in selectables.SELECTABLES:
-        if s.id == "mailbox":
-            assert s.kind == "mailbox"
+        if s.id == "mboard":
+            assert s.kind == "mboard"
         else:
             assert s.kind == "plugin"
         assert s.group

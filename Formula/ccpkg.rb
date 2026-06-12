@@ -9,7 +9,7 @@ class Ccpkg < Formula
   depends_on "python@3.12"
 
   def install
-    libexec.install "ccpkg", "manifest.json", "home", "mailbox", "install.sh", "LICENSE"
+    libexec.install "ccpkg", "manifest.json", "home", "mboard", "install.sh", "LICENSE"
     (bin/"ccpkg").write <<~SH
       #!/bin/bash
       export CCPKG_ROOT="#{opt_libexec}"

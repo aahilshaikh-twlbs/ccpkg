@@ -1,5 +1,5 @@
 ---
-description: Fan out a substantive task across N federated Claude leads in iTerm2 tabs, coordinated via the mailbox. /swarm <task> launches; /swarm close [<id>] reaps; /swarm status lists; /swarm sweep clears workdirs.
+description: Fan out a substantive task across N federated Claude leads in iTerm2 tabs, coordinated via the mboard. /swarm <task> launches; /swarm close [<id>] reaps; /swarm status lists; /swarm sweep clears workdirs.
 ---
 
 <<SWARM:$ARGUMENTS>>

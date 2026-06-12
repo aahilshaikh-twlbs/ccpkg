@@ -233,7 +233,7 @@ def test_scan_repo_still_clean_for_templated_paths(tmp_path):
     # rule — only literal /Users//home do.
     root = str(tmp_path)
     with open(os.path.join(root, "README.md"), "w") as fh:
-        fh.write('run python3 "$HOME/.claude/mailbox/hooks/x.py"\n')
+        fh.write('run python3 "$HOME/.claude/mboard/hooks/x.py"\n')
     findings = scan.scan_repo(root, [])
     assert all(f.rule != "purity" for f in findings)
 

@@ -41,7 +41,7 @@ def test_remove_symlink_no_backup_just_removes(tmp_path):
 def test_merge_target_restores_backup_when_present(tmp_path):
     home = str(tmp_path)
     target = os.path.join(home, "settings.json")
-    _write(target, '{"model":"opus","mailboxhook":1}')
+    _write(target, '{"model":"opus","mboardhook":1}')
     _write(target + config.backup_suffix(), '{"model":"sonnet"}')
 
     item = manifest.Item(path="settings.json", mode="merge")
@@ -69,15 +69,15 @@ def test_template_target_uses_stripped_name(tmp_path):
     assert target == os.path.join(home, "settings.local.json")
 
 
-def test_uninstall_removes_profile_and_mailbox(tmp_path, monkeypatch):
+def test_uninstall_removes_profile_and_mboard(tmp_path, monkeypatch):
     home = str(tmp_path)
-    # Fake an installed tree: a symlinked statusline, a profile, a mailbox dir.
+    # Fake an installed tree: a symlinked statusline, a profile, a mboard dir.
     real = os.path.join(home, "src.sh")
     _write(real, "x")
     os.symlink(real, os.path.join(home, "statusline.sh"))
     profile.save(home, profile.Profile(selected=["statusline.sh"], deselected=[]))
-    os.makedirs(os.path.join(home, "mailbox"))
-    _write(os.path.join(home, "mailbox", "mailboxd.log"), "log")
+    os.makedirs(os.path.join(home, "mboard"))
+    _write(os.path.join(home, "mboard", "mboardd.log"), "log")
 
     monkeypatch.setattr(
         manifest, "parse",
@@ -88,10 +88,10 @@ def test_uninstall_removes_profile_and_mailbox(tmp_path, monkeypatch):
     d = dict(results)
 
     assert d["statusline.sh"] == "removed-symlink"
-    assert d["mailbox"] == "removed"
+    assert d["mboard"] == "removed"
     assert d[profile.PROFILE_NAME] == "removed"
     assert not os.path.lexists(os.path.join(home, "statusline.sh"))
-    assert not os.path.isdir(os.path.join(home, "mailbox"))
+    assert not os.path.isdir(os.path.join(home, "mboard"))
     assert profile.load(home) is None
 
 

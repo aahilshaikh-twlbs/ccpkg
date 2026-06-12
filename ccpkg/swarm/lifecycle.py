@@ -1,21 +1,21 @@
-"""Mailbox polling for swarm lifecycle: lead presence + done collection."""
+"""Mboard polling for swarm lifecycle: lead presence + done collection."""
 import json
 import os
 import sys
 import time
 
 
-def _mailbox_client():
-    """Return the vendored mailbox client (imported lazily so tests can patch)."""
-    src = os.path.expanduser("~/.claude/mailbox/src")
+def _mboard_client():
+    """Return the vendored mboard client (imported lazily so tests can patch)."""
+    src = os.path.expanduser("~/.claude/mboard/src")
     if os.path.isdir(src) and src not in sys.path:
         sys.path.insert(0, src)
     # Also try the repo's vendored copy when running from the repo.
     repo_src = os.path.join(os.path.dirname(os.path.dirname(
-        os.path.dirname(os.path.abspath(__file__)))), "mailbox", "src")
+        os.path.dirname(os.path.abspath(__file__)))), "mboard", "src")
     if os.path.isdir(repo_src) and repo_src not in sys.path:
         sys.path.insert(0, repo_src)
-    from mailbox import client
+    from mboard import client
     return client
 
 
@@ -32,7 +32,7 @@ def _ensure_orchestrator(client, swarm_id):
     its session_id.
 
     The daemon's ps/poll_inbox derive the board set from the *caller's* own
-    presence (mailbox/src/mailbox/protocol.py strips any `board` kwarg), so the
+    presence (mboard/src/mboard/protocol.py strips any `board` kwarg), so the
     orchestrator must be a real session joined to the swarm board to see the
     leads. Re-joining is cheap and also refreshes the orchestrator's heartbeat
     so its presence does not go stale during a long collect.
@@ -48,10 +48,10 @@ def _ensure_orchestrator(client, swarm_id):
 
 
 def wait_for_presence(swarm_id, lead, timeout=45.0, poll_interval=1.0):
-    """Return True once the lead's mailbox presence is active, else False on timeout."""
+    """Return True once the lead's mboard presence is active, else False on timeout."""
     target_label = "swarm-" + swarm_id + "-" + lead
     deadline = time.monotonic() + timeout
-    client = _mailbox_client()
+    client = _mboard_client()
     sid = _ensure_orchestrator(client, swarm_id)
     while time.monotonic() < deadline:
         resp = client.request("ps", {"session_id": sid})
@@ -69,7 +69,7 @@ def poll_done(swarm_id):
 
     Each is a dict with: lead, status, result_path (decoded from body JSON).
     """
-    client = _mailbox_client()
+    client = _mboard_client()
     sid = _ensure_orchestrator(client, swarm_id)
     resp = client.request("poll_inbox", {"session_id": sid})
     if not resp.get("ok"):

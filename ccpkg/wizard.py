@@ -405,7 +405,7 @@ def _render_too_small(out, cur_w, cur_h, need_w, need_h, pal=None):
 def _entry_meta(e):
     # type: (object) -> str
     """One-line metadata for an entry's detail line. Files show `path · mode`;
-    plugins show `plugin · scope`; the mailbox shows `coordinator`."""
+    plugins show `plugin · scope`; the mboard shows `coordinator`."""
     kind = getattr(e, "kind", "")
     if kind == "file":
         parts = [p for p in (getattr(e, "path", ""), getattr(e, "mode", "")) if p]
@@ -413,7 +413,7 @@ def _entry_meta(e):
     if kind == "plugin":
         scope = getattr(e, "scope", "")
         return "plugin" + ((" · " + scope) if scope else "")
-    if kind == "mailbox":
+    if kind == "mboard":
         return "coordinator"
     return ""
 
@@ -693,7 +693,7 @@ def render_summary(summary, out):
 
       applied: list of (label, status) tuples
       plugins: dict name -> status
-      mailbox: dict name -> status
+      mboard: dict name -> status
       notes:   list of str
       skipped: list of label
 
@@ -723,8 +723,8 @@ def render_summary(summary, out):
     plugins = summary.get("plugins") or {}
     _checked_section("Plugins", [(str(k), str(v)) for k, v in plugins.items()])
 
-    mailbox = summary.get("mailbox") or {}
-    _checked_section("Mailbox", [(str(k), str(v)) for k, v in mailbox.items()])
+    mboard = summary.get("mboard") or {}
+    _checked_section("Mboard", [(str(k), str(v)) for k, v in mboard.items()])
 
     skipped = summary.get("skipped") or []
     if skipped:

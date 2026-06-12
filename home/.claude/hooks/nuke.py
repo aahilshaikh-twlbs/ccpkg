@@ -7,7 +7,7 @@
 `ultracode` (xhigh effort + dynamic workflows) is a launch-time setting, so a
 toggle applies from the NEXT session; for the current session the user runs
 `/effort ultracode`. While armed, a standing directive is injected each turn
-preferring persistent agent teams (TeamCreate + mailbox) over ephemeral
+preferring persistent agent teams (TeamCreate + mboard) over ephemeral
 subagents — the one half of "nuke" that has no native switch.
 
 Fail-open ALWAYS: any error exits 0, changes nothing, blocks nothing.
@@ -31,7 +31,7 @@ ARMED_MSG = (
     "settings, ACTIVE from your next session. For THIS session, run "
     "`/effort ultracode` to apply ultracode now; bypass mode requires a "
     "session relaunch (e.g. `claude --dangerously-skip-permissions`). "
-    "Execution preference: use persistent agent teams (TeamCreate + mailbox) "
+    "Execution preference: use persistent agent teams (TeamCreate + mboard) "
     "over ephemeral subagents.\n"
     "</system-reminder>"
 )
@@ -60,7 +60,7 @@ ALREADY_ARMED_MSG = (
 STANDING_MSG = (
     "<system-reminder>\n"
     "\U0001f534 NUKE MODE active — ultracode on (xhigh + dynamic workflows). "
-    "Prefer persistent agent teams (TeamCreate + mailbox) over ephemeral "
+    "Prefer persistent agent teams (TeamCreate + mboard) over ephemeral "
     "subagents for implementation work. For substantive multi-aspect tasks "
     "(refactors, audits, builds with >2 distinct concerns), call `/swarm "
     "<task>` BEFORE writing code — it fans out across federated Claude leads "

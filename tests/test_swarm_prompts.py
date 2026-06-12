@@ -58,12 +58,12 @@ def test_inbox_body_instructs_lead_to_build_its_own_team():
     assert "team lead" in low or "your own team" in low or "your own agent team" in low
 
 
-def test_inbox_done_signal_uses_absolute_mailbox_path_and_no_board_flag():
-    """Lead-side mailbox defects: `mailbox` is not on PATH (only
-    ~/.claude/mailbox/mailbox), and `mailbox send` has no --board flag (routing
+def test_inbox_done_signal_uses_absolute_mboard_path_and_no_board_flag():
+    """Lead-side mboard defects: `mboard` is not on PATH (only
+    ~/.claude/mboard/mboard), and `mboard send` has no --board flag (routing
     is implicit via the joined primary board)."""
     body = prompts.inbox_body("abc", "lead-1", [], subtask="do the thing", task="Y")
-    assert "~/.claude/mailbox/mailbox send" in body
+    assert "~/.claude/mboard/mboard send" in body
     assert "--board" not in body
     assert "--kind swarm_done" in body
     # result path still wired through the lead's workdir env

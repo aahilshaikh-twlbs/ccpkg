@@ -12,7 +12,7 @@ Nuke mode is a persistent toggle:
 - `/nuke off` (alias `/nuke disarm`) — turns ultracode back off.
 
 While armed, every session also prefers **persistent agent teams** (TeamCreate +
-mailbox) over ephemeral subagents for implementation work.
+mboard) over ephemeral subagents for implementation work.
 
 Acknowledge in one line whether nuke mode was just armed or disarmed (based on
 the directive injected this turn), then continue with whatever the user asked

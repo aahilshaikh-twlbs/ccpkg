@@ -15,10 +15,10 @@ class Entry:
     id: str
     desc: str
     default: bool
-    kind: str          # "file" | "plugin" | "mailbox"
+    kind: str          # "file" | "plugin" | "mboard"
     # Metadata for the picker's per-item detail line + presets. All optional so
     # existing positional Entry(id, desc, default, kind) construction still works.
-    path: str = ""     # repo-relative path (files); "" for plugins/mailbox
+    path: str = ""     # repo-relative path (files); "" for plugins/mboard
     mode: str = ""     # symlink | template | merge (files); "" otherwise
     required: bool = False  # essential — drives the Minimal preset / lock hint
     scope: str = ""    # e.g. "user" for plugins
