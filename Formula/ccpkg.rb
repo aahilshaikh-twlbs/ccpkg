@@ -23,14 +23,13 @@ class Ccpkg < Formula
       ccpkg installed its bundled Claude Code environment into:
         #{libexec}
       Apply it to your ~/.claude (and re-apply after each `brew upgrade ccpkg`):
-        ccpkg install   # interactive picker, or
-        ccpkg pull      # apply the saved/default selection headlessly
+        ccpkg apply   # interactive picker, or replays your saved selection headlessly
       `ccpkg push` is disabled in this packaged install (it needs a git checkout).
     EOS
   end
 
   test do
     assert_match "ccpkg #{version}", shell_output("#{bin}/ccpkg --version")
-    system bin/"ccpkg", "scan"
+    system bin/"ccpkg", "status", "scan"
   end
 end

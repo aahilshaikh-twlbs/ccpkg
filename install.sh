@@ -25,7 +25,10 @@ fi
 
 # --- detect OS via ccpkg.osenv (single source of truth; read-only) ---
 OS_NAME="$(python3 -c 'import ccpkg.osenv as o; print(o.detect_os())')"
-CMD="python3 -m ccpkg install --non-interactive"
+# Headless apply of the saved profile/defaults: `apply` with NO preset, stdin
+# redirected from /dev/null so ccpkg auto-detects a non-interactive session and
+# replays the saved profile (a preset would override it — we don't want that).
+CMD="python3 -m ccpkg apply </dev/null"
 echo "install.sh: repo root: $REPO_ROOT"
 echo "install.sh: detected os: $OS_NAME"
 
@@ -55,5 +58,5 @@ if [ -n "$DEPS_REPORT" ]; then
   echo "install.sh: install them manually, then re-run ./install.sh" >&2
 fi
 
-# --- hand off to the Python installer ---
-exec python3 -m ccpkg install --non-interactive
+# --- hand off to the Python installer (headless: stdin from /dev/null) ---
+exec python3 -m ccpkg apply </dev/null

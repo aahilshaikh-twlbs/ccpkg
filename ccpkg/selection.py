@@ -78,9 +78,9 @@ def resolve_selection(items, sels, overlay_present, profile_obj, is_tty,
 
     1. Interactive (a TTY with a wizard): ALWAYS open the picker, pre-ticked from
        the saved profile MERGED with current defaults when a profile exists, else
-       from defaults. Re-running `ccpkg install` is therefore how you update your
-       selection — no flag needed. (`reconfigure` is implied by interactivity and
-       kept only for back-compat; `--yes` sets is_tty False so it skips this.)
+       from defaults. Re-running `ccpkg apply` is therefore how you update your
+       selection — no flag needed. (`reconfigure` is implied by interactivity; a
+       non-TTY context sets is_tty False so it skips the picker.)
     2. profile present (headless, e.g. --yes): replay it — the saved `selected`,
        UNION any default-on feature the profile never recorded (`defaults` minus
        the explicitly `deselected`). Keeps newly-added default-on features from

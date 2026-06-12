@@ -18,7 +18,7 @@ Python tool (no third-party dependencies, system `python3` >= 3.9, macOS or Ubun
    ```
 
    This ensures `git`, `python3`, and `jq` are present (via `brew`/`apt`), then runs
-   `python3 -m ccpkg install` from the repo root.
+   `python3 -m ccpkg apply` from the repo root.
 
 2. **Step by step (preferred when you want to verify each stage):** follow
    [SETUP.md](./SETUP.md). It is an ordered, verifiable playbook: each step has an exact
@@ -30,19 +30,26 @@ secret/PII scanning deterministically. Hand-editing risks drift and leaks.
 
 ## What `ccpkg` does
 
-`python3 -m ccpkg <command>`:
+`python3 -m ccpkg <verb>`:
 
-- `install` — fresh-machine bootstrap (idempotent): load `local.env`, ensure OS deps,
-  apply the base layer, apply the private overlay if configured, reinstall plugins,
-  install the vendored mboard, scan for secrets/PII, and print re-auth instructions.
-- `pull` — re-apply the repo to the live `~/.claude` (symlink/template/merge; backs up
-  before overwrite). No deps/plugins/mboard work.
+- `apply [minimal|recommended|everything]` — install / re-apply the environment
+  (idempotent): load `local.env`, ensure OS deps, apply the base layer, apply the private
+  overlay if configured, reinstall plugins, install the vendored mboard, scan for
+  secrets/PII, and print re-auth instructions. Opens an interactive feature picker when run
+  in a terminal with no preset; runs headlessly when given a preset or when stdin is not a
+  TTY. Re-running reopens the picker, so there is no separate lightweight re-apply.
+- `status` — drift summary between the repo and the live `~/.claude` (the default).
+  - `status diff [item]` — content diff for managed items.
+  - `status health` — deps/profile/mboard/drift health report.
+  - `status scan` — secrets + base-purity scan; exits non-zero if anything is found. Also
+    run by the pre-commit hook and CI.
+- `new <kind> <name>` — scaffold a managed item (`agent` | `command` | `hook` | `skill`).
+  `new overlay [url]` scaffolds and wires up the private overlay.
 - `push [paths...]` — capture changed live files back into the correct layer's working
   tree (classify via `manifest.json`, reverse-templatize machine values to `${VAR}`,
   secret-scan). Never auto-commits.
-- `status` / `doctor` — report drift between the repo and the live `~/.claude`.
-- `scan` — secrets + base-purity scan; exits non-zero if anything is found. Also run by
-  the pre-commit hook.
+- `uninstall [--yes]` — remove managed files (restoring `*.ccpkg.bak` backups), drop the
+  mboard runtime and saved profile. Confirms first unless `--yes`.
 
 ## Layers
 
@@ -55,8 +62,8 @@ secret/PII scanning deterministically. Hand-editing risks drift and leaks.
 ## Secrets
 
 Credentials never live in git. A fresh machine re-authenticates — see the re-auth step in
-[SETUP.md](./SETUP.md). The scan blocks any commit that contains a credential file or a
-secret-looking token.
+[SETUP.md](./SETUP.md). `ccpkg status scan` blocks any commit that contains a credential
+file or a secret-looking token.
 
 ## Where things live
 

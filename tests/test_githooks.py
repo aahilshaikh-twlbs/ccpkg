@@ -21,7 +21,7 @@ def _git(repo, *args):
 
 def _make_repo(tmp_path):
     """A self-contained git repo carrying a copy of the ccpkg package, the
-    .githooks dir, and a home/.claude base tree. ccpkg scan run with cwd=repo
+    .githooks dir, and a home/.claude base tree. ccpkg status scan run with cwd=repo
     resolves repo_root() to this repo and scans its base files."""
     repo = str(tmp_path / "repo")
     os.makedirs(repo)
@@ -92,7 +92,9 @@ def test_planted_purity_term_blocks(tmp_path):
 
 
 def test_hook_invokes_python_module():
-    # contract §16: the hook must call `python3 -m ccpkg scan`
+    # contract §16: the hook must call `python3 -m ccpkg status scan`
     with open(HOOK_SRC) as fh:
         body = fh.read()
-    assert "-m ccpkg scan" in body
+    assert "-m ccpkg status scan" in body
+    # the old top-level `ccpkg scan` verb is gone; make sure nothing still calls it
+    assert "-m ccpkg scan" not in body

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # claude-setup pre-commit hook (contract §16).
-# Runs the ccpkg scan (secrets, always; base-purity for base files) and blocks
+# Runs `ccpkg status scan` (secrets, always; base-purity for base files) and blocks
 # the commit (nonzero exit) if there are any findings.
 set -euo pipefail
 
@@ -13,9 +13,9 @@ export PYTHONPATH="${REPO_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
 
 cd "${REPO_ROOT}"
 
-if ! python3 -m ccpkg scan; then
+if ! python3 -m ccpkg status scan; then
     echo "" >&2
-    echo "pre-commit: ccpkg scan found secrets or base-purity violations." >&2
+    echo "pre-commit: ccpkg status scan found secrets or base-purity violations." >&2
     echo "pre-commit: fix the findings above, move company/personal content to the overlay," >&2
     echo "pre-commit: or templatize machine-specific values. Commit blocked." >&2
     exit 1

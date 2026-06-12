@@ -55,7 +55,7 @@ expanded — `$HOME` resolved to your home directory.
 
 Two equivalent options:
 
-- **Bootstrap script** (ensures `git`/`python3`/`jq`, then installs):
+- **Bootstrap script** (ensures `git`/`python3`/`jq`, then applies):
 
   ```sh
   ./install.sh
@@ -64,32 +64,33 @@ Two equivalent options:
 - **Direct, explicit** (use when deps are already present, or to see each phase):
 
   ```sh
-  python3 -m ccpkg install
+  python3 -m ccpkg apply
   ```
 
-Expected: an install report printed to stdout listing the detected OS, dependency
+Expected: an apply report printed to stdout listing the detected OS, dependency
 results, base items applied, overlay items applied (empty if no overlay), plugin results,
-mboard status, scan findings (should be empty), and notes. `ccpkg install` is idempotent
+mboard status, scan findings (should be empty), and notes. `ccpkg apply` is idempotent
 and never aborts on a sub-step failure — failures are collected into the notes section so
 you can read and address them.
 
 ### Interactive feature picker
 
-Run in a terminal, `python3 -m ccpkg install` opens an interactive feature picker before
-applying anything. Features are grouped into staged screens (Core, Commands, Skills,
-Plugins, Coordination, and an Overlay stage when an overlay is configured). Navigate with
-the arrow keys, toggle an item with space, advance with Enter, and go back with Esc. The
+Run in a terminal with no preset, `python3 -m ccpkg apply` opens an interactive feature
+picker before applying anything. Features are grouped into staged screens (Core, Commands,
+Skills, Plugins, Coordination, and an Overlay stage when an overlay is configured). Navigate
+with the arrow keys, toggle an item with space, advance with Enter, and go back with Esc. The
 resulting selection is saved to `~/.claude/.ccpkg-profile.json` and replayed on later runs.
 
 ```text
-ccpkg install              # feature picker (when run in a terminal)
-ccpkg install --yes        # headless: apply saved profile or defaults
-ccpkg install --reconfigure  # re-open the picker
+ccpkg apply              # feature picker (when run in a terminal with no preset)
+ccpkg apply recommended  # headless preset: minimal | recommended | everything
+ccpkg apply              # re-run to re-open the picker, pre-filled from the saved profile
 ```
 
-`--yes` (alias `--non-interactive`) is headless: it applies the saved profile, or the
-defaults if none exists, with no prompts — this is what `./install.sh` uses. Use
-`--reconfigure` to re-open the picker even when a profile already exists.
+Passing a preset (`minimal` | `recommended` | `everything`) applies headlessly with no
+prompts. `apply` also runs headlessly whenever stdin is not a TTY — this is how `./install.sh`
+applies without blocking — falling back to the saved profile, or the defaults if none exists.
+Re-running `ccpkg apply` interactively re-opens the picker pre-filled from your saved profile.
 
 ## 3. Verify the base layer landed
 
@@ -147,15 +148,15 @@ Expected: hook commands reference `"$HOME/.claude/mboard/hooks/..."`.
 
 If `OVERLAY_REPO` or `OVERLAY_DIR` was set in Step 1, the overlay was already applied
 during Step 2. Confirm its items appear in the report's overlay section, or re-apply the
-repo-to-live mapping (base + overlay, no deps/plugins/mboard):
+repo-to-live mapping (base + overlay):
 
 ```sh
-python3 -m ccpkg pull
+python3 -m ccpkg apply recommended
 ```
 
 Expected: the overlay items (new files and merged allowlist/settings entries) are applied
 on top of the base. If you configured no overlay, this step is a no-op beyond re-applying
-the base.
+the base. (There is no separate lightweight re-apply — `apply` is the only path.)
 
 ## 7. Re-authenticate Claude Code
 
@@ -179,7 +180,7 @@ also prints these instructions when it detects `claude` is installed but not log
 ## 8. Final health check
 
 ```sh
-python3 -m ccpkg doctor
+python3 -m ccpkg status health
 ```
 
 Expected: a health report with no outstanding drift and a `claude doctor` note. The
@@ -188,20 +189,20 @@ plugins configured, mboard installed, and credentials re-established.
 
 ## Re-running
 
-Every step is idempotent. Re-running `./install.sh`, `python3 -m ccpkg install`, or
-`python3 -m ccpkg pull` converges to the same state; managed files are backed up
-(`*.ccpkg.bak`) before any overwrite.
+Every step is idempotent. Re-running `./install.sh` or `python3 -m ccpkg apply` converges
+to the same state; managed files are backed up (`*.ccpkg.bak`) before any overwrite.
 
 ## Optional: enable your private overlay
 
 The base installs and works standalone. To layer in your private personal/company content:
 
-1. Prepare a private overlay shaped like `docs/overlay-example/` (a `manifest.json` whose
-   items use `"layer": "overlay"`, plus a `home/.claude/` mirror).
-2. In your gitignored `local.env`, set ONE of:
+1. Scaffold and wire up an overlay with `python3 -m ccpkg new overlay [url]`, or prepare one
+   by hand shaped like `docs/overlay-example/` (a `manifest.json` whose items use
+   `"layer": "overlay"`, plus a `home/.claude/` mirror).
+2. If wiring it by hand, set ONE of these in your gitignored `local.env`:
    - `OVERLAY_DIR=$HOME/path/to/your/overlay` (local directory), or
    - `OVERLAY_REPO=<git url>` (cloned to `~/.cache/ccpkg/overlay`).
-3. Re-run `python3 -m ccpkg install`. The installer applies the base, then resolves the
+3. Re-run `python3 -m ccpkg apply`. The installer applies the base, then resolves the
    overlay (`clone_overlay`) and applies `layer="overlay"` on top.
 
 Verify the overlay manifest is well-formed before installing:

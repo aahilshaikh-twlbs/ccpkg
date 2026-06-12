@@ -1,6 +1,6 @@
 """argparse CLI binding every ccpkg module (contract section 14).
 
-`python3 -m ccpkg <install|pull|push|status|doctor|scan>`. Stdlib only, Python 3.9.
+`python3 -m ccpkg <apply|status|new|push|uninstall>`. Stdlib only, Python 3.9.
 """
 
 import argparse
@@ -277,7 +277,7 @@ def _cmd_status(root, home, env, os_name):
     drift = _compute_drift(root, home, os_name)
     for path_rel, status in drift:
         print("{0}\t{1}".format(path_rel, status))
-    print("note: run `ccpkg doctor` for an environment health report.")
+    print("note: run `ccpkg status health` for an environment health report.")
     return 0
 
 
@@ -287,14 +287,14 @@ def _cmd_doctor(root, home, env, os_name):
     from collections import Counter
     from . import profile
 
-    print("ccpkg doctor")
+    print("ccpkg status health")
     print("os\t{0}".format(os_name))
     for dep in ("git", "python3", "jq"):
         print("dep {0}\t{1}".format(dep, "present" if osenv.have(dep) else "MISSING"))
 
     prof = profile.load(home)
     if prof is None:
-        print("profile\tnone (run `ccpkg install`)")
+        print("profile\tnone (run `ccpkg apply`)")
     else:
         print("profile\t{0} selected".format(len(prof.selected)))
 
@@ -312,7 +312,7 @@ def _cmd_doctor(root, home, env, os_name):
     print("drift\t{0} ok · {1} drift · {2} missing".format(
         counts.get("ok", 0), counts.get("drift", 0), counts.get("missing", 0)))
     if counts.get("drift", 0) or counts.get("missing", 0):
-        print("note: run `ccpkg status` for per-file detail, then `ccpkg pull` "
+        print("note: run `ccpkg status` for per-file detail, then `ccpkg apply` "
               "to re-apply.")
     print("note: run `claude doctor` for a Claude Code health report.")
     return 0
@@ -362,7 +362,7 @@ def _cmd_new(root, home, env, os_name, kind, name, group, default):
     for p in created:
         print("  {0}".format(p))
     print("next: edit the new file and its 'desc' in manifest.json, then "
-          "`ccpkg pull` to link it into ~/.claude.")
+          "`ccpkg apply` to link it into ~/.claude.")
     return 0
 
 
@@ -370,8 +370,7 @@ def _cmd_overlay(root, home, env, os_name, action, dir, repo, git):
     # overlay init: scaffold a private overlay dir + wire it into local.env.
     from . import overlay
     if action != "init":
-        print("usage: ccpkg overlay init [--dir PATH] [--repo URL] [--git]",
-              file=sys.stderr)
+        print("usage: ccpkg new overlay [url]", file=sys.stderr)
         return 2
     dest = dir or os.path.join(config.user_config_dir(), "overlay")
     le = config.localenv_path(root)
@@ -383,7 +382,7 @@ def _cmd_overlay(root, home, env, os_name, action, dir, repo, git):
         print("created\t{0}".format(c))
     print("localenv\t{0}\t({1})".format(le, result["localenv"]))
     print("git\t{0}".format("initialized" if result["git"] else "skipped"))
-    print("note: add items with `ccpkg new`, then `ccpkg install`.")
+    print("note: add items with `ccpkg new`, then `ccpkg apply`.")
     return 0
 
 
@@ -393,7 +392,7 @@ def _cmd_diff(root, home, env, os_name, item):
     try:
         results = diff.compute(root, home, os_name, only=item)
     except ValueError as exc:
-        print("ccpkg diff: {0}".format(exc), file=sys.stderr)
+        print("ccpkg status diff: {0}".format(exc), file=sys.stderr)
         return 2
     print(diff.render(results, only=item))
     drifted = any(status != "ok" for _p, status, _d in results)
@@ -406,57 +405,43 @@ def _build_parser():
         "--version", action="version", version="ccpkg " + __version__
     )
     sub = parser.add_subparsers(dest="cmd")
-    p_install = sub.add_parser("install")
-    p_install.add_argument("--yes", "--non-interactive", dest="yes",
-                           action="store_true",
-                           help="headless: apply profile or defaults, no prompts")
-    p_install.add_argument("--reconfigure", dest="reconfigure",
-                           action="store_true",
-                           help="re-run the interactive wizard even if a profile exists")
-    p_install.add_argument("--preset", dest="preset",
-                           choices=["minimal", "recommended", "everything"],
-                           default=None,
-                           help="headless preset selection (skips the wizard): "
-                                "minimal=required only, recommended=default-on, "
-                                "everything=all installables")
-    sub.add_parser("pull")
-    p_push = sub.add_parser("push")
+    # apply — install / re-apply the env (interactive if no preset given)
+    p_apply = sub.add_parser(
+        "apply", help="install / re-apply the env (interactive if no preset)")
+    p_apply.add_argument(
+        "preset", nargs="?",
+        choices=["minimal", "recommended", "everything"], default=None,
+        help="headless preset (skips the wizard); omit for the interactive picker")
+
+    # status — inspect: drift (default) + diff / health / scan sub-verbs
+    p_status = sub.add_parser("status", help="inspect: drift / diff / health / scan")
+    st_sub = p_status.add_subparsers(dest="status_action")
+    p_st_diff = st_sub.add_parser("diff", help="content diff (expected -> live)")
+    p_st_diff.add_argument("item", nargs="?", default=None,
+                           help="optional manifest path (e.g. agents/debugger.md)")
+    st_sub.add_parser("health", help="deps / profile / mboard / drift summary")
+    st_sub.add_parser("scan", help="base purity + secrets scan")
+
+    # new — scaffold a managed item (agent/command/hook/skill) or the overlay
+    p_new = sub.add_parser("new", help="scaffold a managed item or the overlay")
+    new_sub = p_new.add_subparsers(dest="new_kind")
+    for _kind in ("agent", "command", "hook", "skill"):
+        p_k = new_sub.add_parser(_kind, help="scaffold a %s (file + manifest entry)" % _kind)
+        p_k.add_argument("name", help="lowercase name matching ^[a-z0-9][a-z0-9-]*$")
+    p_new_ov = new_sub.add_parser("overlay", help="scaffold + wire the private overlay")
+    p_new_ov.add_argument("url", nargs="?", default=None,
+                          help="optional git URL (sets OVERLAY_REPO instead of OVERLAY_DIR)")
+
+    # push — capture live ~/.claude edits back into the repo
+    p_push = sub.add_parser("push", help="capture live ~/.claude edits back into the repo")
     p_push.add_argument("paths", nargs="*")
-    sub.add_parser("status")
-    sub.add_parser("doctor")
-    sub.add_parser("scan")
-    p_uninstall = sub.add_parser("uninstall")
+
+    # uninstall — remove managed files (the one destructive op; keeps its guard)
+    p_uninstall = sub.add_parser("uninstall",
+                                 help="remove managed files, restore backups")
     p_uninstall.add_argument("--yes", "--non-interactive", dest="yes",
                              action="store_true",
                              help="skip the confirmation prompt")
-
-    p_new = sub.add_parser("new",
-                           help="scaffold a new managed item (file + manifest entry)")
-    p_new.add_argument("kind", choices=["agent", "command", "hook", "skill"],
-                       help="agent | command | skill | hook")
-    p_new.add_argument("name", help="lowercase name matching ^[a-z0-9][a-z0-9-]*$")
-    p_new.add_argument("--group", default=None, help="override the manifest group")
-    g_new = p_new.add_mutually_exclusive_group()
-    g_new.add_argument("--default", dest="default", action="store_true",
-                       default=None, help="force default: true")
-    g_new.add_argument("--no-default", dest="default", action="store_false",
-                       help="force default: false")
-
-    p_overlay = sub.add_parser("overlay", help="manage the private overlay layer")
-    ov_sub = p_overlay.add_subparsers(dest="overlay_action")
-    p_ov_init = ov_sub.add_parser("init", help="scaffold + wire a private overlay")
-    p_ov_init.add_argument("--dir", dest="dir", default=None,
-                           help="overlay directory (default: <user_config_dir>/overlay)")
-    p_ov_init.add_argument("--repo", dest="repo", default=None,
-                           help="set OVERLAY_REPO=<url> instead of OVERLAY_DIR")
-    p_ov_init.add_argument("--git", dest="git", action="store_true",
-                           help="run `git init` in the new overlay directory")
-
-    p_diff = sub.add_parser("diff",
-                            help="content diff between the repo and live ~/.claude")
-    p_diff.add_argument("item", nargs="?", default=None,
-                        help="optional manifest path to diff one item "
-                             "(e.g. agents/debugger.md)")
     return parser
 
 
@@ -467,35 +452,34 @@ def main(argv=None):
         parser.print_help()
         return 2
     root, home, env, os_name = _resolve()
-    if args.cmd == "install":
-        return _cmd_install(root, home, env, os_name,
-                            yes=getattr(args, "yes", False),
-                            reconfigure=getattr(args, "reconfigure", False),
-                            preset=getattr(args, "preset", None))
-    if args.cmd == "pull":
-        return _cmd_pull(root, home, env, os_name)
+    if args.cmd == "apply":
+        # No preset on a TTY -> interactive wizard; a preset (or a non-TTY) ->
+        # headless. _cmd_install derives that from yes/preset/_stdin_is_tty().
+        return _cmd_install(root, home, env, os_name, yes=False,
+                            reconfigure=False, preset=getattr(args, "preset", None))
+    if args.cmd == "status":
+        action = getattr(args, "status_action", None)
+        if action == "diff":
+            return _cmd_diff(root, home, env, os_name, getattr(args, "item", None))
+        if action == "health":
+            return _cmd_doctor(root, home, env, os_name)
+        if action == "scan":
+            return _cmd_scan(root, home, env, os_name)
+        return _cmd_status(root, home, env, os_name)
+    if args.cmd == "new":
+        kind = getattr(args, "new_kind", None)
+        if kind is None:
+            print("usage: ccpkg new {agent,command,hook,skill,overlay} ...",
+                  file=sys.stderr)
+            return 2
+        if kind == "overlay":
+            return _cmd_overlay(root, home, env, os_name, action="init",
+                                dir=None, repo=getattr(args, "url", None), git=False)
+        return _cmd_new(root, home, env, os_name, kind, args.name, None, None)
     if args.cmd == "push":
         return _cmd_push(root, home, env, os_name, args.paths)
-    if args.cmd == "scan":
-        return _cmd_scan(root, home, env, os_name)
-    if args.cmd == "status":
-        return _cmd_status(root, home, env, os_name)
-    if args.cmd == "doctor":
-        return _cmd_doctor(root, home, env, os_name)
     if args.cmd == "uninstall":
         return _cmd_uninstall(root, home, env, os_name,
                               yes=getattr(args, "yes", False))
-    if args.cmd == "new":
-        return _cmd_new(root, home, env, os_name, args.kind, args.name,
-                        getattr(args, "group", None),
-                        getattr(args, "default", None))
-    if args.cmd == "overlay":
-        return _cmd_overlay(root, home, env, os_name,
-                            action=getattr(args, "overlay_action", None),
-                            dir=getattr(args, "dir", None),
-                            repo=getattr(args, "repo", None),
-                            git=getattr(args, "git", False))
-    if args.cmd == "diff":
-        return _cmd_diff(root, home, env, os_name, getattr(args, "item", None))
     parser.print_help()
     return 2
