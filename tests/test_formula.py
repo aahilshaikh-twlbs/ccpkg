@@ -10,7 +10,7 @@ REPO = config.repo_root()
 FORMULA = os.path.join(REPO, "Formula", "ccpkg.rb")
 
 # The exact set the formula copies into libexec — must all exist at the repo root.
-RUNTIME_SUBSET = ["ccpkg", "manifest.json", "home", "mailbox", "install.sh", "LICENSE"]
+RUNTIME_SUBSET = ["ccpkg", "manifest.json", "home", "mboard", "install.sh", "LICENSE"]
 
 
 def test_runtime_subset_exists_at_repo_root():

@@ -69,7 +69,7 @@ Two equivalent options:
 
 Expected: an install report printed to stdout listing the detected OS, dependency
 results, base items applied, overlay items applied (empty if no overlay), plugin results,
-mailbox status, scan findings (should be empty), and notes. `ccpkg install` is idempotent
+mboard status, scan findings (should be empty), and notes. `ccpkg install` is idempotent
 and never aborts on a sub-step failure — failures are collected into the notes section so
 you can read and address them.
 
@@ -124,30 +124,30 @@ each set to `true`; `extraKnownMarketplaces` includes the `understand-anything` 
 marketplace. If the `claude` CLI was present, the report from Step 2 also shows each
 plugin's install status.
 
-## 5. Verify the mailbox is installed
+## 5. Verify the mboard is installed
 
-The vendored mailbox installer symlinks `~/.claude/mailbox/{mailbox,hooks}` to this repo's
-`mailbox/` source and merges its hooks (with `$HOME`-relative commands) into
+The vendored mboard installer symlinks `~/.claude/mboard/{mboard,hooks}` to this repo's
+`mboard/` source and merges its hooks (with `$HOME`-relative commands) into
 `settings.json`. Confirm the symlinks:
 
 ```sh
-ls -l "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/mailbox"
+ls -l "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/mboard"
 ```
 
-Expected: `mailbox` and `hooks` entries present and pointing at this repo's `mailbox/`
+Expected: `mboard` and `hooks` entries present and pointing at this repo's `mboard/`
 directory. Confirm the hook commands are `$HOME`-relative (not absolute machine paths):
 
 ```sh
 jq '.hooks' "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
 ```
 
-Expected: hook commands reference `"$HOME/.claude/mailbox/hooks/..."`.
+Expected: hook commands reference `"$HOME/.claude/mboard/hooks/..."`.
 
 ## 6. Apply the overlay (if you configured one)
 
 If `OVERLAY_REPO` or `OVERLAY_DIR` was set in Step 1, the overlay was already applied
 during Step 2. Confirm its items appear in the report's overlay section, or re-apply the
-repo-to-live mapping (base + overlay, no deps/plugins/mailbox):
+repo-to-live mapping (base + overlay, no deps/plugins/mboard):
 
 ```sh
 python3 -m ccpkg pull
@@ -184,7 +184,7 @@ python3 -m ccpkg doctor
 
 Expected: a health report with no outstanding drift and a `claude doctor` note. The
 environment is now reconstructed: base (and overlay, if any) applied, settings merged,
-plugins configured, mailbox installed, and credentials re-established.
+plugins configured, mboard installed, and credentials re-established.
 
 ## Re-running
 

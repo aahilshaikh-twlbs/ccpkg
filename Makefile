@@ -14,7 +14,7 @@ DIST := dist/ccpkg-$(VERSION).tar.gz
 
 dist:
 	@rm -rf dist && mkdir -p dist/ccpkg-$(VERSION)
-	@cp -R ccpkg manifest.json home mailbox install.sh LICENSE dist/ccpkg-$(VERSION)/
+	@cp -R ccpkg manifest.json home mboard install.sh LICENSE dist/ccpkg-$(VERSION)/
 	@find dist/ccpkg-$(VERSION) -name '__pycache__' -type d -prune -exec rm -rf {} +
 	@tar -C dist -czf $(DIST) ccpkg-$(VERSION)
 	@rm -rf dist/ccpkg-$(VERSION)

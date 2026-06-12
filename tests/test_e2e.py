@@ -66,11 +66,11 @@ def test_plugin_settings_present_after_install(e2e_repo, fake_run):
         assert name in live.get("extraKnownMarketplaces", {})
 
 
-def test_mailbox_install_invoked(e2e_repo, fake_run):
+def test_mboard_install_invoked(e2e_repo, fake_run):
     report = _run_install(e2e_repo, fake_run)
-    # mailbox_install.install returns a status dict; installer records it on the report
-    assert isinstance(report.mailbox, dict)
-    assert report.mailbox != {}
+    # mboard_install.install returns a status dict; installer records it on the report
+    assert isinstance(report.mboard, dict)
+    assert report.mboard != {}
 
 
 def test_scan_over_base_is_clean(e2e_repo, fake_run):

@@ -111,7 +111,7 @@ def _print_results(results):
 
 
 def _all_ids(items, sels, overlay_present):
-    # every selectable id the picker would surface (files + plugins + mailbox).
+    # every selectable id the picker would surface (files + plugins + mboard).
     from . import selection
     out = set()
     for stage in selection.build_stages(items, sels, overlay_present):
@@ -189,8 +189,8 @@ def _cmd_install(root, home, env, os_name, yes=False, reconfigure=False,
     _print_results(report.overlay_applied)
     for plugin, status in report.plugins.items():
         print("plugin {0}\t{1}".format(plugin, status))
-    for name, status in report.mailbox.items():
-        print("mailbox {0}\t{1}".format(name, status))
+    for name, status in report.mboard.items():
+        print("mboard {0}\t{1}".format(name, status))
     _print_findings(report.scan_findings)
     for note in report.notes:
         print("note: {0}".format(note))
@@ -204,7 +204,7 @@ def _cmd_install(root, home, env, os_name, yes=False, reconfigure=False,
             summary = {
                 "applied": list(report.base_applied) + list(report.overlay_applied),
                 "plugins": dict(report.plugins),
-                "mailbox": dict(report.mailbox),
+                "mboard": dict(report.mboard),
                 "notes": list(report.notes),
                 "skipped": sorted(
                     _all_ids(items, selectables.SELECTABLES, overlay_present)
@@ -279,7 +279,7 @@ def _cmd_status(root, home, env, os_name):
 
 
 def _cmd_doctor(root, home, env, os_name):
-    # doctor = environment health: deps, profile, mailbox, and a drift SUMMARY
+    # doctor = environment health: deps, profile, mboard, and a drift SUMMARY
     # (distinct from `status`, which lists per-file drift).
     from collections import Counter
     from . import profile
@@ -295,15 +295,15 @@ def _cmd_doctor(root, home, env, os_name):
     else:
         print("profile\t{0} selected".format(len(prof.selected)))
 
-    sock = os.path.join(home, "mailbox", "mailboxd.sock")
-    mb_dir = os.path.join(home, "mailbox")
+    sock = os.path.join(home, "mboard", "mboardd.sock")
+    mb_dir = os.path.join(home, "mboard")
     if os.path.exists(sock):
         mb = "running"
     elif os.path.isdir(mb_dir):
         mb = "installed (daemon stopped)"
     else:
         mb = "absent"
-    print("mailbox\t{0}".format(mb))
+    print("mboard\t{0}".format(mb))
 
     counts = Counter(status for _p, status in _compute_drift(root, home, os_name))
     print("drift\t{0} ok · {1} drift · {2} missing".format(
@@ -331,7 +331,7 @@ def _cmd_uninstall(root, home, env, os_name, yes=False):
         print("ccpkg uninstall will remove these managed files from {0}:".format(home))
         for t in targets:
             print("  {0}".format(t))
-        print("  …plus the mailbox runtime and the saved profile. "
+        print("  …plus the mboard runtime and the saved profile. "
               "*.ccpkg.bak backups are restored where present; settings.json is "
               "never deleted (backup restored, or left for manual review).")
         try:

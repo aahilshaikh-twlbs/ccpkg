@@ -2,7 +2,7 @@
 
 Your Claude Code environment as code. `ccpkg` is a dependency-free Python tool that
 reconstructs a complete, non-vanilla Claude Code setup — settings, hooks, statusline, cost
-scripts, commands, skills, plugin/marketplace choices, and a vendored mailbox coordinator —
+scripts, commands, skills, plugin/marketplace choices, and a vendored mboard coordinator —
 from a single repository, on a fresh macOS or Ubuntu machine. Personal, company, and secret
 content never enters the public repo; it lives in an optional private overlay you point the
 tool at.
@@ -49,7 +49,7 @@ itself reconstructs the environment, see [CLAUDE.md](./CLAUDE.md).
 
 `ccpkg install` runs a fresh-machine bootstrap: it loads per-machine config, ensures OS
 dependencies, applies the base layer (and a private overlay if one is configured), reinstalls
-plugins, installs the mailbox, scans for secrets/PII, and prints any re-auth instructions. It
+plugins, installs the mboard, scans for secrets/PII, and prints any re-auth instructions. It
 is idempotent — re-running it converges to the same state.
 
 Run in a terminal, `ccpkg install` opens an interactive feature picker before applying
@@ -68,7 +68,7 @@ keystroke, or *Custom* to walk each group. After applying, a summary screen reca
 ccpkg install                       # interactive picker (preset screen, pre-filled on a re-run)
 ccpkg install --yes                 # headless: apply saved profile or defaults, no prompts
 ccpkg install --preset recommended  # headless preset: minimal | recommended | everything
-ccpkg uninstall                     # remove managed files, restore backups, drop mailbox + profile
+ccpkg uninstall                     # remove managed files, restore backups, drop mboard + profile
 ```
 
 `--yes` (alias `--non-interactive`) is fully headless — it applies the saved profile, or the
@@ -135,12 +135,12 @@ dependencies):
 
 | Command | What it does |
 | --- | --- |
-| `install` | Bootstrap / update (idempotent): deps, base, overlay, plugins, mailbox, scan, re-auth notes. Interactive runs open the picker (pre-filled on a re-run); `--yes` is headless. |
+| `install` | Bootstrap / update (idempotent): deps, base, overlay, plugins, mboard, scan, re-auth notes. Interactive runs open the picker (pre-filled on a re-run); `--yes` is headless. |
 | `pull` | Re-apply repo to live `~/.claude` (symlink/template/merge; backs up first). |
 | `push [paths...]` | Capture changed live files into the right layer; reverse-templatize machine values; secret-scan. No auto-commit. Requires a git checkout. |
-| `uninstall` | Remove managed files from `~/.claude` (restoring `*.ccpkg.bak` backups), drop the mailbox runtime + saved profile. Confirms first; `--yes` to skip. Never deletes `settings.json` outright. |
+| `uninstall` | Remove managed files from `~/.claude` (restoring `*.ccpkg.bak` backups), drop the mboard runtime + saved profile. Confirms first; `--yes` to skip. Never deletes `settings.json` outright. |
 | `status` | Per-file drift between the repo and live `~/.claude`. |
-| `doctor` | Environment health report: deps, profile, mailbox state, and a drift summary. |
+| `doctor` | Environment health report: deps, profile, mboard state, and a drift summary. |
 | `scan` | Secrets + base-purity scan; exits non-zero on findings. Also the pre-commit hook. |
 
 ## Repository layout
@@ -154,7 +154,7 @@ ccpkg/
   local.env.example    # per-machine variables template
   manifest.json        # declarative managed-set: path, mode, os, layer
   home/.claude/        # source-of-truth mirror of the portable (base) setup
-  mailbox/             # vendored mailbox coordinator ($HOME-relative hooks)
+  mboard/             # vendored mboard coordinator ($HOME-relative hooks)
   ccpkg/               # Python installer/CLI (stdlib only, python3 >= 3.9)
   Formula/ccpkg.rb     # Homebrew formula
   .githooks/pre-commit # runs `ccpkg scan`; blocks commits with secrets/PII
@@ -196,7 +196,7 @@ install sets:
 
 | Variable | Meaning |
 |----------|---------|
-| `CCPKG_ROOT` | absolute path to the bundled asset tree (`manifest.json`, `home/.claude/`, `mailbox/`). When set, ccpkg reads its assets from here instead of a git checkout. |
+| `CCPKG_ROOT` | absolute path to the bundled asset tree (`manifest.json`, `home/.claude/`, `mboard/`). When set, ccpkg reads its assets from here instead of a git checkout. |
 | `CCPKG_LOCAL_ENV` | optional explicit path to `local.env`. |
 
 When `CCPKG_ROOT` is set, ccpkg:

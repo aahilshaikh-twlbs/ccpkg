@@ -42,8 +42,8 @@ def _patch_substeps(monkeypatch, calls):
         lambda run=None, have=None: (calls.__setitem__("plugins", True), {"superpowers@claude-plugins-official": "installed"})[1],
     )
     monkeypatch.setattr(
-        installer.mailbox_install, "install",
-        lambda root, home_target, run=None: (calls.__setitem__("mailbox", (root, home_target)), {"mailbox": "linked"})[1],
+        installer.mboard_install, "install",
+        lambda root, home_target, run=None: (calls.__setitem__("mboard", (root, home_target)), {"mboard": "linked"})[1],
     )
     monkeypatch.setattr(
         installer.scan, "load_purity_terms",
@@ -73,9 +73,9 @@ def test_install_dry_run_base_only(tmp_home, tmp_repo, fake_run, monkeypatch):
     assert report.overlay_applied == []
     # Steps 5 & 6 invoked.
     assert calls["plugins"] is True
-    assert calls["mailbox"] == (tmp_repo, tmp_home)
+    assert calls["mboard"] == (tmp_repo, tmp_home)
     assert report.plugins == {"superpowers@claude-plugins-official": "installed"}
-    assert report.mailbox == {"mailbox": "linked"}
+    assert report.mboard == {"mboard": "linked"}
     # Step 7: scan ran over the BASE source layer.
     assert calls["scan"][1] == "base"
     assert report.scan_findings == []
@@ -114,8 +114,8 @@ def test_install_never_raises_when_a_step_fails(tmp_home, tmp_repo, fake_run, mo
     assert isinstance(report, InstallReport)
     # The failure surfaced in notes, not as an exception.
     assert any("plugins" in n and "claude CLI exploded" in n for n in report.notes)
-    # Other steps still ran (mailbox after plugins).
-    assert calls["mailbox"] == (tmp_repo, tmp_home)
+    # Other steps still ran (mboard after plugins).
+    assert calls["mboard"] == (tmp_repo, tmp_home)
 
 
 def test_install_records_scan_findings(tmp_home, tmp_repo, fake_run, monkeypatch):
@@ -129,7 +129,7 @@ def test_install_records_scan_findings(tmp_home, tmp_repo, fake_run, monkeypatch
     assert report.scan_findings == [finding]
     # Findings are reported, not fatal — install still completed every step.
     assert report.base_applied
-    assert report.mailbox == {"mailbox": "linked"}
+    assert report.mboard == {"mboard": "linked"}
 
 
 def test_install_auth_note_when_claude_present_and_logged_out(tmp_home, tmp_repo, fake_run, monkeypatch):
@@ -198,12 +198,12 @@ def test_install_filters_base_items_by_selection(tmp_repo, tmp_home):
     assert "statusline.sh" not in applied
 
 
-def test_install_skips_mailbox_when_not_selected(tmp_repo, tmp_home):
+def test_install_skips_mboard_when_not_selected(tmp_repo, tmp_home):
     from ccpkg import installer
     report = installer.install(
         tmp_repo, tmp_home, env={}, os_name="darwin",
-        run=_fake_run(), selected={"settings.json"})  # 'mailbox' absent
-    assert report.mailbox.get("status") in (None, "skipped") or report.mailbox == {}
+        run=_fake_run(), selected={"settings.json"})  # 'mboard' absent
+    assert report.mboard.get("status") in (None, "skipped") or report.mboard == {}
 
 
 def test_install_none_selection_applies_all(tmp_repo, tmp_home):

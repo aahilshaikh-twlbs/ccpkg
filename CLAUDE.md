@@ -2,7 +2,7 @@
 
 This repository is a self-describing, environment-as-code definition of a customized
 Claude Code setup (settings, hooks, statusline, cost scripts, commands, skills, plugin
-choices, and a vendored mailbox coordinator). It is built so that **you, Claude, can
+choices, and a vendored mboard coordinator). It is built so that **you, Claude, can
 reconstruct the entire non-vanilla environment on a fresh machine** without hand-editing
 JSON or guessing at steps.
 
@@ -34,9 +34,9 @@ secret/PII scanning deterministically. Hand-editing risks drift and leaks.
 
 - `install` — fresh-machine bootstrap (idempotent): load `local.env`, ensure OS deps,
   apply the base layer, apply the private overlay if configured, reinstall plugins,
-  install the vendored mailbox, scan for secrets/PII, and print re-auth instructions.
+  install the vendored mboard, scan for secrets/PII, and print re-auth instructions.
 - `pull` — re-apply the repo to the live `~/.claude` (symlink/template/merge; backs up
-  before overwrite). No deps/plugins/mailbox work.
+  before overwrite). No deps/plugins/mboard work.
 - `push [paths...]` — capture changed live files back into the correct layer's working
   tree (classify via `manifest.json`, reverse-templatize machine values to `${VAR}`,
   secret-scan). Never auto-commits.
@@ -64,7 +64,7 @@ secret-looking token.
   (`symlink` | `template` | `merge`), `os` (`any` | `darwin` | `linux`), and `layer`
   (`base` | `overlay`). Adding a feature = add an entry plus the file.
 - `home/.claude/` — the source-of-truth mirror of the portable (base) setup.
-- `mailbox/` — vendored mailbox coordinator source ($HOME-relative hooks).
+- `mboard/` — vendored mboard coordinator source ($HOME-relative hooks).
 - `ccpkg/` — the installer/CLI package.
 
 Start with [SETUP.md](./SETUP.md) to reconstruct, or [README.md](./README.md) for a human

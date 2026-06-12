@@ -126,12 +126,12 @@ def e2e_repo(tmp_repo, tmp_home):
     with open(os.path.join(base_src, "commands", "handoff.md"), "w") as f:
         f.write("# handoff\nGeneric handoff command. No PII.\n")
 
-    # --- minimal vendored mailbox source so mailbox_install.install returns a
+    # --- minimal vendored mboard source so mboard_install.install returns a
     #     non-empty status dict (Contract §11) ---
-    mailbox_root = os.path.join(root, "mailbox")
-    os.makedirs(os.path.join(mailbox_root, "bin"), exist_ok=True)
-    os.makedirs(os.path.join(mailbox_root, "hooks"), exist_ok=True)
-    with open(os.path.join(mailbox_root, "bin", "mailbox"), "w") as f:
+    mboard_root = os.path.join(root, "mboard")
+    os.makedirs(os.path.join(mboard_root, "bin"), exist_ok=True)
+    os.makedirs(os.path.join(mboard_root, "hooks"), exist_ok=True)
+    with open(os.path.join(mboard_root, "bin", "mboard"), "w") as f:
         f.write("#!/usr/bin/env bash\nexit 0\n")
 
     # --- base manifest (2 items, all base/any) ---

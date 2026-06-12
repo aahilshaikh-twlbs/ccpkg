@@ -1,6 +1,6 @@
 """Reverse a ccpkg install: remove the managed files it laid into ~/.claude,
 restoring the pre-install `*.ccpkg.bak` backups where present, then drop the
-mailbox runtime and the saved profile. Stdlib only, Python 3.9.
+mboard runtime and the saved profile. Stdlib only, Python 3.9.
 
 Safety: merge-mode files (settings.json) are NEVER deleted outright — they may
 hold the user's own keys. We restore the backup if one exists, otherwise leave
@@ -77,20 +77,20 @@ def _remove_one(item, target):
     return "absent"
 
 
-def uninstall(root, home, os_name, remove_mailbox=True):
+def uninstall(root, home, os_name, remove_mboard=True):
     # type: (str, str, str, bool) -> List[Tuple[str, str]]
     """Perform the uninstall. Returns (label, status) for every action."""
     results = []  # type: List[Tuple[str, str]]
     for item, target in base_targets(root, home, os_name):
         results.append((item.path, _remove_one(item, target)))
 
-    if remove_mailbox:
-        mb_dir = os.path.join(home, "mailbox")
+    if remove_mboard:
+        mb_dir = os.path.join(home, "mboard")
         if os.path.isdir(mb_dir) or os.path.islink(mb_dir):
             shutil.rmtree(mb_dir, ignore_errors=True)
-            results.append(("mailbox", "removed"))
+            results.append(("mboard", "removed"))
         else:
-            results.append(("mailbox", "absent"))
+            results.append(("mboard", "absent"))
 
     prof_path = os.path.join(home, profile.PROFILE_NAME)
     if os.path.isfile(prof_path):

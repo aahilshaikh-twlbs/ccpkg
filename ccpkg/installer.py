@@ -10,7 +10,7 @@ from . import osenv
 from . import manifest
 from . import apply as apply_mod
 from . import plugins
-from . import mailbox_install
+from . import mboard_install
 from . import scan
 
 
@@ -21,7 +21,7 @@ class InstallReport:
     base_applied: List[Tuple[str, str]] = field(default_factory=list)
     overlay_applied: List[Tuple[str, str]] = field(default_factory=list)
     plugins: Dict[str, str] = field(default_factory=dict)
-    mailbox: Dict[str, str] = field(default_factory=dict)
+    mboard: Dict[str, str] = field(default_factory=dict)
     scan_findings: List["scan.Finding"] = field(default_factory=list)
     notes: List[str] = field(default_factory=list)
 
@@ -84,7 +84,7 @@ def install(root, home_target, env, os_name, run=subprocess.run,
             interactive=False, selected=None):
     # type: (str, str, Dict[str, str], str, object, bool, object) -> InstallReport
     """Run the install pipeline. When `selected` is a set of ids, only those
-    manifest items / overlay items / plugins / mailbox are applied; when None,
+    manifest items / overlay items / plugins / mboard are applied; when None,
     everything applies (legacy behavior). Never raises; sub-step failures -> notes."""
     report = InstallReport(os=os_name)
 
@@ -146,14 +146,14 @@ def install(root, home_target, env, os_name, run=subprocess.run,
     except Exception as exc:
         report.notes.append("plugins: %s" % exc)
 
-    # 6. mailbox
+    # 6. mboard
     try:
-        if selected is None or "mailbox" in selected:
-            report.mailbox = mailbox_install.install(root, home_target, run=run)
+        if selected is None or "mboard" in selected:
+            report.mboard = mboard_install.install(root, home_target, run=run)
         else:
-            report.mailbox = {"status": "skipped"}
+            report.mboard = {"status": "skipped"}
     except Exception as exc:
-        report.notes.append("mailbox: %s" % exc)
+        report.notes.append("mboard: %s" % exc)
 
     # 7. scan base source (report findings; do not delete)
     try:

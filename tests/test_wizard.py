@@ -666,7 +666,7 @@ def test_entry_meta_kinds():
     assert wizard._entry_meta(f) == "some/path · template"
     p = Entry("x", "d", True, "plugin", scope="user")
     assert wizard._entry_meta(p) == "plugin · user"
-    mb = Entry("x", "d", True, "mailbox")
+    mb = Entry("x", "d", True, "mboard")
     assert wizard._entry_meta(mb) == "coordinator"
 
 
@@ -768,7 +768,7 @@ def test_render_summary_plain():
     summary = {
         "applied": [("settings.json", "merged"), ("statusline.sh", "linked")],
         "plugins": {"superpowers": "installed"},
-        "mailbox": {"coordinator": "linked"},
+        "mboard": {"coordinator": "linked"},
         "notes": ["re-auth required"],
         "skipped": ["frontend-design"],
     }

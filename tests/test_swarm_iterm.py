@@ -20,14 +20,14 @@ def test_spawn_tab_builds_correct_osascript(monkeypatch):
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     pane_id = iterm.spawn_tab(
-        env={"FOO": "bar", "MAILBOX_BOARD": "swarm-x"},
+        env={"FOO": "bar", "MBOARD_BOARD": "swarm-x"},
         cmd="claude --dangerously-skip-permissions",
     )
     assert pane_id == "PANE-ABC-123"
     # osascript must include both env exports and the cmd
     osa = captured["input"]
     assert "FOO=bar" in osa
-    assert "MAILBOX_BOARD=swarm-x" in osa
+    assert "MBOARD_BOARD=swarm-x" in osa
     assert "claude --dangerously-skip-permissions" in osa
 
 

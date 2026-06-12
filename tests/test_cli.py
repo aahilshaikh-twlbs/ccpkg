@@ -133,7 +133,7 @@ def test_main_install_invokes_installer_and_prints_report(tmp_repo, tmp_home, mo
         return installer.InstallReport(
             os=os_name, deps={"git": "present"},
             base_applied=[("settings.json", "linked")],
-            overlay_applied=[], plugins={}, mailbox={}, scan_findings=[], notes=[],
+            overlay_applied=[], plugins={}, mboard={}, scan_findings=[], notes=[],
         )
 
     monkeypatch.setattr(cli.installer, "install", _fake_install)
@@ -208,7 +208,7 @@ def test_main_status_prints_drift(tmp_repo, tmp_home, monkeypatch, capsys):
 
 
 def test_main_doctor_prints_health_report(tmp_repo, tmp_home, monkeypatch, capsys):
-    # doctor is a health report (os/deps/profile/mailbox/drift SUMMARY), distinct
+    # doctor is a health report (os/deps/profile/mboard/drift SUMMARY), distinct
     # from status's per-file listing.
     _seed_localenv(tmp_repo, tmp_home)
     _patch_resolution(monkeypatch, tmp_repo, tmp_home)
@@ -223,7 +223,7 @@ def test_main_doctor_prints_health_report(tmp_repo, tmp_home, monkeypatch, capsy
     assert "os\t" in out
     assert "dep git\t" in out
     assert "profile\t" in out
-    assert "mailbox\t" in out
+    assert "mboard\t" in out
     assert "drift\t" in out                    # summary line, not per-file
 
 
@@ -241,14 +241,14 @@ def test_status_and_doctor_differ(tmp_repo, tmp_home, monkeypatch, capsys):
     assert "dep git\t" in doctor_out and "dep git\t" not in status_out
 
 
-def test_main_uninstall_yes_removes_profile_and_mailbox(tmp_repo, tmp_home,
+def test_main_uninstall_yes_removes_profile_and_mboard(tmp_repo, tmp_home,
                                                         monkeypatch, capsys):
     from ccpkg import profile
     _seed_localenv(tmp_repo, tmp_home)
     _patch_resolution(monkeypatch, tmp_repo, tmp_home)
     # Fake an installed tree in the live home.
     profile.save(tmp_home, profile.Profile(selected=["statusline.sh"], deselected=[]))
-    os.makedirs(os.path.join(tmp_home, "mailbox"))
+    os.makedirs(os.path.join(tmp_home, "mboard"))
     with open(os.path.join(tmp_home, "statusline.sh"), "w") as fh:
         fh.write("live")
 
@@ -256,9 +256,9 @@ def test_main_uninstall_yes_removes_profile_and_mailbox(tmp_repo, tmp_home,
 
     assert rc == 0
     out = capsys.readouterr().out
-    assert "mailbox\tremoved" in out
+    assert "mboard\tremoved" in out
     assert profile.load(tmp_home) is None
-    assert not os.path.isdir(os.path.join(tmp_home, "mailbox"))
+    assert not os.path.isdir(os.path.join(tmp_home, "mboard"))
 
 
 def test_main_uninstall_refuses_without_yes_when_not_tty(tmp_repo, tmp_home,
@@ -270,13 +270,13 @@ def test_main_uninstall_refuses_without_yes_when_not_tty(tmp_repo, tmp_home,
     _patch_resolution(monkeypatch, tmp_repo, tmp_home)
     monkeypatch.setattr(cli, "_stdin_is_tty", lambda: False)   # non-interactive
     profile.save(tmp_home, profile.Profile(selected=["statusline.sh"], deselected=[]))
-    os.makedirs(os.path.join(tmp_home, "mailbox"))
+    os.makedirs(os.path.join(tmp_home, "mboard"))
 
     rc = cli.main(["uninstall"])               # no --yes, no TTY
 
     assert rc == 2                              # refused
     assert profile.load(tmp_home) is not None   # nothing removed
-    assert os.path.isdir(os.path.join(tmp_home, "mailbox"))
+    assert os.path.isdir(os.path.join(tmp_home, "mboard"))
     assert "refusing" in capsys.readouterr().err.lower()
 
 
@@ -323,7 +323,7 @@ def _stub_install(*a, **k):
     # A fast installer.install double: a valid empty InstallReport, no side effects.
     return installer.InstallReport(
         os="darwin", deps={}, base_applied=[], overlay_applied=[],
-        plugins={}, mailbox={}, scan_findings=[], notes=[],
+        plugins={}, mboard={}, scan_findings=[], notes=[],
     )
 
 
@@ -467,7 +467,7 @@ def test_install_preset_everything_selects_all(tmp_repo, tmp_home, monkeypatch):
         captured["selected"] = selected
         return installer.InstallReport(
             os=os_name, deps={}, base_applied=[], overlay_applied=[],
-            plugins={}, mailbox={}, scan_findings=[], notes=[],
+            plugins={}, mboard={}, scan_findings=[], notes=[],
         )
 
     monkeypatch.setattr(installer, "install", _capture_install)
@@ -491,7 +491,7 @@ def test_install_preset_recommended_matches_defaults(tmp_repo, tmp_home, monkeyp
         captured["selected"] = selected
         return installer.InstallReport(
             os=os_name, deps={}, base_applied=[], overlay_applied=[],
-            plugins={}, mailbox={}, scan_findings=[], notes=[],
+            plugins={}, mboard={}, scan_findings=[], notes=[],
         )
 
     monkeypatch.setattr(installer, "install", _capture_install)
@@ -516,7 +516,7 @@ def test_install_preset_minimal_is_required_only(tmp_repo, tmp_home, monkeypatch
         captured["selected"] = selected
         return installer.InstallReport(
             os=os_name, deps={}, base_applied=[], overlay_applied=[],
-            plugins={}, mailbox={}, scan_findings=[], notes=[],
+            plugins={}, mboard={}, scan_findings=[], notes=[],
         )
 
     monkeypatch.setattr(installer, "install", _capture_install)
@@ -547,7 +547,7 @@ def test_install_renders_summary_on_interactive_tty(tmp_repo, tmp_home, monkeypa
             base_applied=[("settings.json", "merged")],
             overlay_applied=[("commands/private.md", "linked")],
             plugins={"superpowers": "installed"},
-            mailbox={"daemon": "running"},
+            mboard={"daemon": "running"},
             scan_findings=[], notes=["a note"],
         )
 
@@ -564,7 +564,7 @@ def test_install_renders_summary_on_interactive_tty(tmp_repo, tmp_home, monkeypa
     assert s["applied"] == [("settings.json", "merged"),
                             ("commands/private.md", "linked")]
     assert s["plugins"] == {"superpowers": "installed"}
-    assert s["mailbox"] == {"daemon": "running"}
+    assert s["mboard"] == {"daemon": "running"}
     assert s["notes"] == ["a note"]
     assert isinstance(s["skipped"], list)        # ids not selected
     assert "settings.json" not in s["skipped"]   # it WAS selected
