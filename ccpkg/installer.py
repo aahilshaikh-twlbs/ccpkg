@@ -11,6 +11,7 @@ from . import manifest
 from . import apply as apply_mod
 from . import plugins
 from . import mboard_install
+from . import packs as packs_mod
 from . import scan
 
 
@@ -22,6 +23,7 @@ class InstallReport:
     overlay_applied: List[Tuple[str, str]] = field(default_factory=list)
     plugins: Dict[str, str] = field(default_factory=dict)
     mboard: Dict[str, str] = field(default_factory=dict)
+    packs: Dict[str, str] = field(default_factory=dict)
     scan_findings: List["scan.Finding"] = field(default_factory=list)
     notes: List[str] = field(default_factory=list)
 
@@ -146,7 +148,20 @@ def install(root, home_target, env, os_name, run=subprocess.run,
     except Exception as exc:
         report.notes.append("plugins: %s" % exc)
 
-    # 6. mboard
+    # 6. packs (best-effort, mirroring the plugins step)
+    try:
+        if selected is None:
+            report.packs = packs_mod.cli_install(run=run, have=osenv.have,
+                                                  home=home_target)
+        else:
+            wanted = {p.id for p in packs_mod.PACKS if p.id in selected}
+            report.packs = packs_mod.cli_install(run=run, have=osenv.have,
+                                                  home=home_target, only=wanted)
+        report.notes.extend(packs_mod.setup_notes(report.packs))
+    except Exception as exc:
+        report.notes.append("packs: %s" % exc)
+
+    # 7. mboard
     try:
         if selected is None or "mboard" in selected:
             report.mboard = mboard_install.install(root, home_target, run=run)
@@ -155,7 +170,7 @@ def install(root, home_target, env, os_name, run=subprocess.run,
     except Exception as exc:
         report.notes.append("mboard: %s" % exc)
 
-    # 7. scan base source (report findings; do not delete)
+    # 8. scan base source (report findings; do not delete)
     try:
         terms = scan.load_purity_terms(root)
         paths = []
@@ -166,7 +181,7 @@ def install(root, home_target, env, os_name, run=subprocess.run,
     except Exception as exc:
         report.notes.append("scan: %s" % exc)
 
-    # 8. auth status note
+    # 9. auth status note
     _auth_note(report, run, osenv.have)
 
     return report

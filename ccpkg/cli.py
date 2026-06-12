@@ -189,6 +189,8 @@ def _cmd_install(root, home, env, os_name, yes=False, reconfigure=False,
     _print_results(report.overlay_applied)
     for plugin, status in report.plugins.items():
         print("plugin {0}\t{1}".format(plugin, status))
+    for pack_id, status in report.packs.items():
+        print("pack {0}\t{1}".format(pack_id, status))
     for name, status in report.mboard.items():
         print("mboard {0}\t{1}".format(name, status))
     _print_findings(report.scan_findings)
@@ -204,6 +206,7 @@ def _cmd_install(root, home, env, os_name, yes=False, reconfigure=False,
             summary = {
                 "applied": list(report.base_applied) + list(report.overlay_applied),
                 "plugins": dict(report.plugins),
+                "packs": dict(report.packs),
                 "mboard": dict(report.mboard),
                 "notes": list(report.notes),
                 "skipped": sorted(

@@ -405,7 +405,8 @@ def _render_too_small(out, cur_w, cur_h, need_w, need_h, pal=None):
 def _entry_meta(e):
     # type: (object) -> str
     """One-line metadata for an entry's detail line. Files show `path · mode`;
-    plugins show `plugin · scope`; the mboard shows `coordinator`."""
+    plugins show `plugin · scope`; the mboard shows `coordinator`;
+    packs show `skill pack` or `agent pack` based on group."""
     kind = getattr(e, "kind", "")
     if kind == "file":
         parts = [p for p in (getattr(e, "path", ""), getattr(e, "mode", "")) if p]
@@ -415,6 +416,13 @@ def _entry_meta(e):
         return "plugin" + ((" · " + scope) if scope else "")
     if kind == "mboard":
         return "coordinator"
+    if kind == "pack":
+        group = getattr(e, "group", "")
+        if group == "Skills":
+            return "skill pack"
+        if group == "Agents":
+            return "agent pack"
+        return "pack"
     return ""
 
 
@@ -725,6 +733,10 @@ def render_summary(summary, out):
 
     mboard = summary.get("mboard") or {}
     _checked_section("Mboard", [(str(k), str(v)) for k, v in mboard.items()])
+
+    packs = summary.get("packs") or {}
+    if packs:
+        _checked_section("Packs", [(str(k), str(v)) for k, v in packs.items()])
 
     skipped = summary.get("skipped") or []
     if skipped:

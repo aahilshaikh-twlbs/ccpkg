@@ -16,8 +16,9 @@ def test_build_stages_orders_groups_and_skips_empty():
     stages = selection.build_stages(_items(), selectables.SELECTABLES,
                                     overlay_present=False)
     names = [s.name for s in stages]
-    # Core before Skills before Plugins before Coordination; Overlay skipped.
-    assert names == ["Core", "Skills", "Plugins", "Coordination"]
+    # Core before Skills before Agents before Plugins before Coordination; Overlay skipped.
+    # "Agents" is present because pack selectables add that group.
+    assert names == ["Core", "Skills", "Agents", "Plugins", "Coordination"]
 
 
 def test_build_stages_includes_overlay_when_present():
