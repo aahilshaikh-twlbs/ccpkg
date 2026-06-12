@@ -40,8 +40,11 @@ def test_install_sh_dryrun_exits_zero_and_reports_plan():
     assert REPO_ROOT in proc.stdout
     # detects an os value from osenv.detect_os()
     assert ("darwin" in proc.stdout) or ("linux" in proc.stdout)
-    # reports the exact command it would exec
-    assert "python3 -m ccpkg install" in proc.stdout
+    # reports the exact command it would exec: the new headless apply with stdin
+    # redirected from /dev/null (no preset -> replays the saved profile).
+    assert "python3 -m ccpkg apply </dev/null" in proc.stdout
+    # the removed `install` verb must NOT be referenced any more
+    assert "ccpkg install" not in proc.stdout
     # does NOT actually run the installer in dry-run
     assert "DRYRUN" in proc.stdout
 
@@ -93,3 +96,15 @@ def test_install_sh_exports_pythonpath_repo_root():
     with open(INSTALL_SH, "r") as fh:
         body = fh.read()
     assert "PYTHONPATH" in body
+
+
+def test_install_sh_execs_headless_apply_with_devnull_stdin():
+    # The real hand-off (the `exec` line, not just the dry-run echo) must invoke
+    # the new headless apply with stdin redirected from /dev/null so ccpkg
+    # auto-detects a non-interactive session and replays the saved profile.
+    with open(INSTALL_SH, "r") as fh:
+        body = fh.read()
+    assert "exec python3 -m ccpkg apply </dev/null" in body
+    # the removed verb / flags must be gone entirely
+    assert "ccpkg install" not in body
+    assert "--non-interactive" not in body

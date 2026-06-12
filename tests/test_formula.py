@@ -40,11 +40,29 @@ def test_formula_ccpkg_root_uses_stable_opt_prefix():
     # CCPKG_ROOT must resolve to the version-independent opt prefix, not the
     # versioned Cellar keg. With #{libexec} (Cellar), every `brew upgrade` deletes
     # the old keg and dangles every symlink ccpkg lays into ~/.claude until the
-    # user re-runs `ccpkg install`. #{opt_libexec} survives upgrades.
+    # user re-runs `ccpkg apply`. #{opt_libexec} survives upgrades.
     with open(FORMULA, "r", encoding="utf-8") as fh:
         text = fh.read()
     assert 'CCPKG_ROOT="#{opt_libexec}"' in text
     assert 'CCPKG_ROOT="#{libexec}"' not in text
+
+
+def test_formula_caveats_use_apply_not_removed_verbs():
+    # The CLI consolidated to 5 verbs: `install`/`pull` are gone, folded into
+    # `apply`. The caveats (and the `test do` block) must reflect that.
+    with open(FORMULA, "r", encoding="utf-8") as fh:
+        text = fh.read()
+    assert "ccpkg apply" in text
+    # the removed `pull` verb must not be advertised any more
+    assert "ccpkg pull" not in text
+    # the removed `install` verb must not appear as a *command* invocation. The
+    # prose line "ccpkg installed its bundled ..." is fine, so guard against the
+    # command forms only (followed by EOL or a trailing comment), not the word.
+    import re
+    assert not re.search(r"ccpkg install(\s|$)", text), \
+        "formula still invokes the removed `ccpkg install` verb"
+    # the bundled `brew test` must invoke the scan via its new `status` parent verb
+    assert '"status", "scan"' in text
 
 
 def test_formula_ruby_syntax_valid():

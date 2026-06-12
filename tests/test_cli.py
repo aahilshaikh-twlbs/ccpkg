@@ -44,7 +44,7 @@ def test_main_scan_exits_1_on_planted_purity(tmp_repo, tmp_home, monkeypatch, ca
     with open(planted, "w") as fh:
         fh.write('{"company": "acmecorp"}\n')
 
-    rc = cli.main(["scan"])
+    rc = cli.main(["status", "scan"])
 
     assert rc == 1
     out = capsys.readouterr().out
@@ -61,7 +61,7 @@ def test_main_scan_is_repo_wide(tmp_repo, tmp_home, monkeypatch, capsys):
     with open(os.path.join(tmp_repo, "README.md"), "w") as fh:
         fh.write("we partnered with acmecorp last year\n")
 
-    rc = cli.main(["scan"])
+    rc = cli.main(["status", "scan"])
 
     assert rc == 1
     out = capsys.readouterr().out
@@ -78,49 +78,12 @@ def test_main_scan_clean_exits_0(tmp_repo, tmp_home, monkeypatch, capsys):
     with open(os.path.join(base_src, "settings.json"), "w") as fh:
         fh.write('{"model": "opus"}\n')
 
-    rc = cli.main(["scan"])
+    rc = cli.main(["status", "scan"])
 
     assert rc == 0
 
 
-def test_main_pull_applies_items(tmp_repo, tmp_home, monkeypatch, capsys):
-    _seed_localenv(tmp_repo, tmp_home)
-    _patch_resolution(monkeypatch, tmp_repo, tmp_home)
-    # ensure the base settings.json source is clean and present.
-    base_src = os.path.join(tmp_repo, "home", ".claude")
-    with open(os.path.join(base_src, "settings.json"), "w") as fh:
-        fh.write('{"model": "opus"}\n')
-
-    rc = cli.main(["pull"])
-
-    assert rc == 0
-    # pull applies the manifest items into home_target.
-    applied = os.path.join(tmp_home, "settings.json")
-    assert os.path.exists(applied)
-    out = capsys.readouterr().out
-    assert "settings.json" in out
-
-
-def test_main_pull_does_not_install_deps_or_plugins(tmp_repo, tmp_home, monkeypatch):
-    _seed_localenv(tmp_repo, tmp_home)
-    _patch_resolution(monkeypatch, tmp_repo, tmp_home)
-    with open(os.path.join(tmp_repo, "home", ".claude", "settings.json"), "w") as fh:
-        fh.write('{"model": "opus"}\n')
-    called = {"install": False}
-
-    def _boom(*a, **k):
-        called["install"] = True
-        raise AssertionError("installer.install must not run on pull")
-
-    monkeypatch.setattr(cli.installer, "install", _boom)
-
-    rc = cli.main(["pull"])
-
-    assert rc == 0
-    assert called["install"] is False
-
-
-def test_main_install_invokes_installer_and_prints_report(tmp_repo, tmp_home, monkeypatch, capsys):
+def test_main_apply_invokes_installer_and_prints_report(tmp_repo, tmp_home, monkeypatch, capsys):
     _seed_localenv(tmp_repo, tmp_home)
     _patch_resolution(monkeypatch, tmp_repo, tmp_home)
     captured = {}
@@ -138,7 +101,7 @@ def test_main_install_invokes_installer_and_prints_report(tmp_repo, tmp_home, mo
 
     monkeypatch.setattr(cli.installer, "install", _fake_install)
 
-    rc = cli.main(["install"])
+    rc = cli.main(["apply"])
 
     assert rc == 0
     assert captured["root"] == tmp_repo
@@ -207,19 +170,19 @@ def test_main_status_prints_drift(tmp_repo, tmp_home, monkeypatch, capsys):
     assert "missing" in out
 
 
-def test_main_doctor_prints_health_report(tmp_repo, tmp_home, monkeypatch, capsys):
-    # doctor is a health report (os/deps/profile/mboard/drift SUMMARY), distinct
-    # from status's per-file listing.
+def test_main_status_health_prints_health_report(tmp_repo, tmp_home, monkeypatch, capsys):
+    # `status health` is a health report (os/deps/profile/mboard/drift SUMMARY),
+    # distinct from status's per-file listing.
     _seed_localenv(tmp_repo, tmp_home)
     _patch_resolution(monkeypatch, tmp_repo, tmp_home)
     with open(os.path.join(tmp_repo, "home", ".claude", "settings.json"), "w") as fh:
         fh.write('{"model": "opus"}\n')
 
-    rc = cli.main(["doctor"])
+    rc = cli.main(["status", "health"])
 
     assert rc == 0
     out = capsys.readouterr().out
-    assert "ccpkg doctor" in out
+    assert "ccpkg status health" in out
     assert "os\t" in out
     assert "dep git\t" in out
     assert "profile\t" in out
@@ -227,18 +190,18 @@ def test_main_doctor_prints_health_report(tmp_repo, tmp_home, monkeypatch, capsy
     assert "drift\t" in out                    # summary line, not per-file
 
 
-def test_status_and_doctor_differ(tmp_repo, tmp_home, monkeypatch, capsys):
-    # Regression: status and doctor must NOT print identical output (they used to
-    # be the same function).
+def test_status_and_status_health_differ(tmp_repo, tmp_home, monkeypatch, capsys):
+    # Regression: `status` and `status health` must NOT print identical output
+    # (they used to be the same function).
     _seed_localenv(tmp_repo, tmp_home)
     _patch_resolution(monkeypatch, tmp_repo, tmp_home)
     cli.main(["status"])
     status_out = capsys.readouterr().out
-    cli.main(["doctor"])
-    doctor_out = capsys.readouterr().out
-    assert status_out != doctor_out
-    # a doctor-only marker that status never prints
-    assert "dep git\t" in doctor_out and "dep git\t" not in status_out
+    cli.main(["status", "health"])
+    health_out = capsys.readouterr().out
+    assert status_out != health_out
+    # a health-only marker that status never prints
+    assert "dep git\t" in health_out and "dep git\t" not in status_out
 
 
 def test_main_uninstall_yes_removes_profile_and_mboard(tmp_repo, tmp_home,
@@ -308,17 +271,6 @@ def test_main_no_subcommand_prints_help_nonzero(tmp_repo, tmp_home, monkeypatch,
     assert "usage" in out.lower()
 
 
-def test_install_parser_accepts_new_flags():
-    from ccpkg import cli
-    parser = cli._build_parser()
-    args = parser.parse_args(["install", "--yes"])
-    assert args.yes is True
-    args = parser.parse_args(["install", "--reconfigure"])
-    assert args.reconfigure is True
-    args = parser.parse_args(["install", "--non-interactive"])
-    assert args.yes is True            # --non-interactive aliases --yes
-
-
 def _stub_install(*a, **k):
     # A fast installer.install double: a valid empty InstallReport, no side effects.
     return installer.InstallReport(
@@ -327,18 +279,20 @@ def _stub_install(*a, **k):
     )
 
 
-def test_install_yes_is_headless_and_writes_no_profile(tmp_repo, tmp_home, monkeypatch):
+def test_apply_headless_writes_no_profile(tmp_repo, tmp_home, monkeypatch):
     from ccpkg import cli, profile
     monkeypatch.setattr(cli.config, "repo_root", lambda: tmp_repo)
     monkeypatch.setattr(cli.config, "home_target", lambda: tmp_home)
-    # --yes with NO prior profile applies defaults headlessly; the wizard never
-    # ran, so NO profile is persisted (the wizard owns the profile).
-    rc = cli.main(["install", "--yes"])
+    monkeypatch.setattr(cli, "_stdin_is_tty", lambda: False)   # non-TTY => headless
+    # `apply` with no preset on a non-TTY stdin and NO prior profile applies
+    # defaults headlessly; the wizard never ran, so NO profile is persisted
+    # (the wizard owns the profile).
+    rc = cli.main(["apply"])
     assert rc == 0
     assert profile.load(tmp_home) is None
 
 
-def test_install_wizard_path_writes_profile(tmp_repo, tmp_home, monkeypatch):
+def test_apply_wizard_path_writes_profile(tmp_repo, tmp_home, monkeypatch):
     from ccpkg import cli, profile, wizard
     monkeypatch.setattr(cli.config, "repo_root", lambda: tmp_repo)
     monkeypatch.setattr(cli.config, "home_target", lambda: tmp_home)
@@ -347,14 +301,16 @@ def test_install_wizard_path_writes_profile(tmp_repo, tmp_home, monkeypatch):
                         lambda stages, pre, existing=False: {"settings.json"})
     monkeypatch.setattr(installer, "install", _stub_install)
 
-    rc = cli.main(["install"])           # interactive TTY path, no prior profile
+    rc = cli.main(["apply"])           # interactive TTY path, no prior profile
     assert rc == 0
     prof = profile.load(tmp_home)
     assert prof is not None
     assert prof.selected == ["settings.json"]
 
 
-def test_install_reconfigure_writes_profile(tmp_repo, tmp_home, monkeypatch):
+def test_apply_rerun_with_profile_writes_profile(tmp_repo, tmp_home, monkeypatch):
+    # The old `--reconfigure` flag is gone: re-running `apply` (interactive, with a
+    # saved profile) already reopens the picker and persists the new selection.
     from ccpkg import cli, profile, wizard
     monkeypatch.setattr(cli.config, "repo_root", lambda: tmp_repo)
     monkeypatch.setattr(cli.config, "home_target", lambda: tmp_home)
@@ -365,18 +321,19 @@ def test_install_reconfigure_writes_profile(tmp_repo, tmp_home, monkeypatch):
                         {"settings.json", "statusline.sh"})
     monkeypatch.setattr(installer, "install", _stub_install)
 
-    rc = cli.main(["install", "--reconfigure"])
+    rc = cli.main(["apply"])
     assert rc == 0
     prof = profile.load(tmp_home)
     assert set(prof.selected) == {"settings.json", "statusline.sh"}
 
 
-def test_install_yes_replay_does_not_rewrite_profile(tmp_repo, tmp_home, monkeypatch):
-    # Headless replay (--yes with a saved profile) applies the profile and must
-    # NOT rewrite it — the wizard never ran.
+def test_apply_headless_replay_does_not_rewrite_profile(tmp_repo, tmp_home, monkeypatch):
+    # Headless replay (non-TTY `apply` with a saved profile) applies the profile
+    # and must NOT rewrite it — the wizard never ran.
     from ccpkg import cli, profile
     monkeypatch.setattr(cli.config, "repo_root", lambda: tmp_repo)
     monkeypatch.setattr(cli.config, "home_target", lambda: tmp_home)
+    monkeypatch.setattr(cli, "_stdin_is_tty", lambda: False)   # non-TTY => headless
     profile.save(tmp_home, profile.Profile(selected=["settings.json"],
                                            deselected=["statusline.sh"]))
     monkeypatch.setattr(installer, "install", _stub_install)
@@ -385,12 +342,12 @@ def test_install_yes_replay_does_not_rewrite_profile(tmp_repo, tmp_home, monkeyp
     monkeypatch.setattr(profile, "save",
                         lambda *a, **k: saved.__setitem__("called", True))
 
-    rc = cli.main(["install", "--yes"])  # headless replay
+    rc = cli.main(["apply"])             # headless replay
     assert rc == 0
     assert saved["called"] is False      # headless replay must NOT rewrite
 
 
-def test_install_rerun_reopens_picker_and_rewrites(tmp_repo, tmp_home, monkeypatch):
+def test_apply_rerun_reopens_picker_and_rewrites(tmp_repo, tmp_home, monkeypatch):
     # The update flow: an interactive re-run WITH a saved profile reopens the
     # picker (pre-filled) and persists the (possibly changed) selection.
     from ccpkg import cli, profile, wizard
@@ -408,14 +365,14 @@ def test_install_rerun_reopens_picker_and_rewrites(tmp_repo, tmp_home, monkeypat
 
     monkeypatch.setattr(wizard, "run_wizard", fake_wizard)
 
-    rc = cli.main(["install"])           # no --reconfigure; picker still reopens
+    rc = cli.main(["apply"])             # re-running apply still reopens the picker
     assert rc == 0
     assert seen["existing"] is True      # splash knows it's a re-run
     prof = profile.load(tmp_home)
     assert set(prof.selected) == {"settings.json", "statusline.sh"}
 
 
-def test_install_ctrl_c_during_wizard_cancels(tmp_repo, tmp_home, monkeypatch, capsys):
+def test_apply_ctrl_c_during_wizard_cancels(tmp_repo, tmp_home, monkeypatch, capsys):
     from ccpkg import cli, wizard
     monkeypatch.setattr(cli.config, "repo_root", lambda: tmp_repo)
     monkeypatch.setattr(cli.config, "home_target", lambda: tmp_home)
@@ -431,24 +388,24 @@ def test_install_ctrl_c_during_wizard_cancels(tmp_repo, tmp_home, monkeypatch, c
 
     monkeypatch.setattr(installer, "install", _no_install)
 
-    rc = cli.main(["install"])
+    rc = cli.main(["apply"])
     assert rc == 130
     assert "cancelled" in capsys.readouterr().out.lower()
 
 
-def test_install_parser_accepts_preset():
+def test_apply_parser_accepts_preset_positional():
     from ccpkg import cli
     parser = cli._build_parser()
     for name in ("minimal", "recommended", "everything"):
-        args = parser.parse_args(["install", "--preset", name])
+        args = parser.parse_args(["apply", name])
         assert args.preset == name
-    # default: no preset
-    args = parser.parse_args(["install"])
+    # default: no preset positional
+    args = parser.parse_args(["apply"])
     assert args.preset is None
 
 
-def test_install_preset_everything_selects_all(tmp_repo, tmp_home, monkeypatch):
-    # --preset everything is headless: skips the wizard, applies ALL surfaced ids,
+def test_apply_everything_selects_all(tmp_repo, tmp_home, monkeypatch):
+    # `apply everything` is headless: skips the wizard, applies ALL surfaced ids,
     # and writes NO profile.
     from ccpkg import cli, profile, wizard, selectables, selection, manifest
     monkeypatch.setattr(cli.config, "repo_root", lambda: tmp_repo)
@@ -456,7 +413,7 @@ def test_install_preset_everything_selects_all(tmp_repo, tmp_home, monkeypatch):
     monkeypatch.setattr(cli, "_stdin_is_tty", lambda: True)   # would be interactive
 
     def _no_wizard(*a, **k):
-        raise AssertionError("wizard must not run with --preset")
+        raise AssertionError("wizard must not run with a preset")
 
     monkeypatch.setattr(wizard, "run_wizard", _no_wizard)
 
@@ -472,7 +429,7 @@ def test_install_preset_everything_selects_all(tmp_repo, tmp_home, monkeypatch):
 
     monkeypatch.setattr(installer, "install", _capture_install)
 
-    rc = cli.main(["install", "--preset", "everything"])
+    rc = cli.main(["apply", "everything"])
     assert rc == 0
     items = manifest.parse(cli.config.manifest_path(tmp_repo))
     expected = cli._all_ids(items, selectables.SELECTABLES, False)
@@ -480,7 +437,7 @@ def test_install_preset_everything_selects_all(tmp_repo, tmp_home, monkeypatch):
     assert profile.load(tmp_home) is None   # headless: no profile written
 
 
-def test_install_preset_recommended_matches_defaults(tmp_repo, tmp_home, monkeypatch):
+def test_apply_recommended_matches_defaults(tmp_repo, tmp_home, monkeypatch):
     from ccpkg import cli, selectables, selection, manifest
     monkeypatch.setattr(cli.config, "repo_root", lambda: tmp_repo)
     monkeypatch.setattr(cli.config, "home_target", lambda: tmp_home)
@@ -496,14 +453,14 @@ def test_install_preset_recommended_matches_defaults(tmp_repo, tmp_home, monkeyp
 
     monkeypatch.setattr(installer, "install", _capture_install)
 
-    rc = cli.main(["install", "--preset", "recommended"])
+    rc = cli.main(["apply", "recommended"])
     assert rc == 0
     items = manifest.parse(cli.config.manifest_path(tmp_repo))
     expected = selection.default_ids(items, selectables.SELECTABLES, False)
     assert captured["selected"] == expected
 
 
-def test_install_preset_minimal_is_required_only(tmp_repo, tmp_home, monkeypatch):
+def test_apply_minimal_is_required_only(tmp_repo, tmp_home, monkeypatch):
     # minimal = required-only. The fixture manifest marks nothing required, so the
     # minimal set is empty — and crucially is NOT the default-on set.
     from ccpkg import cli, selectables, selection, manifest
@@ -521,7 +478,7 @@ def test_install_preset_minimal_is_required_only(tmp_repo, tmp_home, monkeypatch
 
     monkeypatch.setattr(installer, "install", _capture_install)
 
-    rc = cli.main(["install", "--preset", "minimal"])
+    rc = cli.main(["apply", "minimal"])
     assert rc == 0
     items = manifest.parse(cli.config.manifest_path(tmp_repo))
     defaults = selection.default_ids(items, selectables.SELECTABLES, False)
@@ -529,7 +486,7 @@ def test_install_preset_minimal_is_required_only(tmp_repo, tmp_home, monkeypatch
     assert captured["selected"] != defaults
 
 
-def test_install_renders_summary_on_interactive_tty(tmp_repo, tmp_home, monkeypatch):
+def test_apply_renders_summary_on_interactive_tty(tmp_repo, tmp_home, monkeypatch):
     # On the interactive TTY path, after the plain report we ALSO call
     # wizard.render_summary(summary, out) with the agreed dict shape.
     from ccpkg import cli, wizard, profile
@@ -558,7 +515,7 @@ def test_install_renders_summary_on_interactive_tty(tmp_repo, tmp_home, monkeypa
                         lambda summary, out: captured.update(summary=summary, out=out),
                         raising=False)
 
-    rc = cli.main(["install"])
+    rc = cli.main(["apply"])
     assert rc == 0
     s = captured["summary"]
     assert s["applied"] == [("settings.json", "merged"),
@@ -570,12 +527,13 @@ def test_install_renders_summary_on_interactive_tty(tmp_repo, tmp_home, monkeypa
     assert "settings.json" not in s["skipped"]   # it WAS selected
 
 
-def test_install_summary_skipped_when_not_tty(tmp_repo, tmp_home, monkeypatch):
+def test_apply_summary_skipped_when_not_tty(tmp_repo, tmp_home, monkeypatch):
     # Headless / non-TTY path must NOT call render_summary (keeps plain output
     # parseable and avoids styled noise in pipes).
     from ccpkg import cli, wizard
     monkeypatch.setattr(cli.config, "repo_root", lambda: tmp_repo)
     monkeypatch.setattr(cli.config, "home_target", lambda: tmp_home)
+    monkeypatch.setattr(cli, "_stdin_is_tty", lambda: False)   # non-TTY => headless
     monkeypatch.setattr(installer, "install", _stub_install)
 
     called = {"render": False}
@@ -583,13 +541,13 @@ def test_install_summary_skipped_when_not_tty(tmp_repo, tmp_home, monkeypatch):
                         lambda summary, out: called.__setitem__("render", True),
                         raising=False)
 
-    rc = cli.main(["install", "--yes"])   # headless
+    rc = cli.main(["apply"])              # headless
     assert rc == 0
     assert called["render"] is False
 
 
-def test_install_summary_guarded_when_render_absent(tmp_repo, tmp_home, monkeypatch):
-    # If wizard.render_summary hasn't landed yet, the interactive install must
+def test_apply_summary_guarded_when_render_absent(tmp_repo, tmp_home, monkeypatch):
+    # If wizard.render_summary hasn't landed yet, the interactive apply must
     # still succeed (getattr guard) rather than crash.
     from ccpkg import cli, wizard
     monkeypatch.setattr(cli.config, "repo_root", lambda: tmp_repo)
@@ -602,17 +560,18 @@ def test_install_summary_guarded_when_render_absent(tmp_repo, tmp_home, monkeypa
     # Ensure the attribute is absent.
     monkeypatch.delattr(wizard, "render_summary", raising=False)
 
-    rc = cli.main(["install"])
+    rc = cli.main(["apply"])
     assert rc == 0
 
 
-def test_install_applies_synthetic_extra_manifest_item(tmp_repo, tmp_home, monkeypatch):
+def test_apply_applies_synthetic_extra_manifest_item(tmp_repo, tmp_home, monkeypatch):
     # New installables flow generically: a manifest item added by 'content' (here
-    # a synthetic default-on symlink) is applied by a headless install with no
+    # a synthetic default-on symlink) is applied by a headless apply with no
     # cli/flow changes needed.
     from ccpkg import cli
     _seed_localenv(tmp_repo, tmp_home)
     _patch_resolution(monkeypatch, tmp_repo, tmp_home)
+    monkeypatch.setattr(cli, "_stdin_is_tty", lambda: False)   # non-TTY => headless
 
     # Add a brand-new manifest item + its source file.
     manifest_path = os.path.join(tmp_repo, "manifest.json")
@@ -630,7 +589,7 @@ def test_install_applies_synthetic_extra_manifest_item(tmp_repo, tmp_home, monke
     with open(os.path.join(src_cmd, "brand-new.md"), "w") as fh:
         fh.write("# brand new command\n")
 
-    rc = cli.main(["install", "--yes"])   # headless: defaults => includes new item
+    rc = cli.main(["apply"])              # headless: defaults => includes new item
     assert rc == 0
     applied = os.path.join(tmp_home, "commands", "brand-new.md")
     assert os.path.exists(applied)

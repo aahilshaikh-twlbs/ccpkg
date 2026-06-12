@@ -1,7 +1,7 @@
 # Overlay example (sample, committed)
 
 This directory is a **committed, scrubbed example** of the private-overlay layout. It is
-NOT your real overlay and is never applied automatically by `ccpkg install`. It exists so
+NOT your real overlay and is never applied automatically by `ccpkg apply`. It exists so
 you can see the exact shape an overlay must have.
 
 ## Structure (mirrors the base)
@@ -31,7 +31,7 @@ The real overlay is a **separate private location**, configured in your gitignor
   (`installer.clone_overlay`), then applies.
 - `OVERLAY_DIR=<path>` — a local directory applied in place.
 
-`ccpkg install` applies **base first, then overlay** with the same machinery
+`ccpkg apply` applies **base first, then overlay** with the same machinery
 (`apply.apply_layer(..., layer="overlay", ...)`), so overlay files add new files and
 layer templated allowlist entries on top of the base.
 
@@ -57,5 +57,5 @@ this task and produces nothing in the public base repo:
    overlay's `home/.claude/`; add one overlay manifest item per file (use
    `"mode": "template"` for any file containing `${VAR}` tokens).
 3. Set `OVERLAY_REPO` or `OVERLAY_DIR` in your `local.env`.
-4. Run `python3 -m ccpkg install` (or `pull`) — base applies, then your overlay applies
+4. Run `python3 -m ccpkg apply` — base applies, then your overlay applies
    on top.
