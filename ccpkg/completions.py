@@ -78,6 +78,8 @@ def bash_script():
     status_subs = " ".join(tree.get("status", []))
     new_subs = " ".join(tree.get("new", []))
     mcp_subs = " ".join(tree.get("mcp", []))
+    suggest_subs = " ".join(tree.get("suggest", []))
+    gallery_subs = " ".join(tree.get("gallery", []))
     presets = " ".join(APPLY_PRESETS)
     completions_vals = " ".join(COMPLETIONS_VALUES)
     return """\
@@ -105,6 +107,12 @@ _ccpkg() {{
         new)
             [ "$COMP_CWORD" -eq 2 ] && COMPREPLY=( $(compgen -W "{new_subs}" -- "$cur") )
             ;;
+        suggest)
+            [ "$COMP_CWORD" -eq 2 ] && COMPREPLY=( $(compgen -W "{suggest_subs}" -- "$cur") )
+            ;;
+        gallery)
+            [ "$COMP_CWORD" -eq 2 ] && COMPREPLY=( $(compgen -W "{gallery_subs}" -- "$cur") )
+            ;;
         mcp)
             if [ "$COMP_CWORD" -eq 2 ]; then
                 COMPREPLY=( $(compgen -W "{mcp_subs}" -- "$cur") )
@@ -119,7 +127,8 @@ _ccpkg() {{
 }}
 complete -F _ccpkg ccpkg
 """.format(verbs=verbs, presets=presets, status_subs=status_subs,
-           new_subs=new_subs, mcp_subs=mcp_subs, completions_vals=completions_vals)
+           new_subs=new_subs, mcp_subs=mcp_subs, suggest_subs=suggest_subs,
+           gallery_subs=gallery_subs, completions_vals=completions_vals)
 
 
 def zsh_script():
@@ -129,6 +138,8 @@ def zsh_script():
     status_subs = " ".join(tree.get("status", []))
     new_subs = " ".join(tree.get("new", []))
     mcp_subs = " ".join(tree.get("mcp", []))
+    suggest_subs = " ".join(tree.get("suggest", []))
+    gallery_subs = " ".join(tree.get("gallery", []))
     presets = " ".join(APPLY_PRESETS)
     completions_vals = " ".join(COMPLETIONS_VALUES)
     return """\
@@ -155,6 +166,12 @@ _ccpkg() {{
         new)
             (( CURRENT == 3 )) && compadd -- {new_subs}
             ;;
+        suggest)
+            (( CURRENT == 3 )) && compadd -- {suggest_subs}
+            ;;
+        gallery)
+            (( CURRENT == 3 )) && compadd -- {gallery_subs}
+            ;;
         mcp)
             if (( CURRENT == 3 )); then
                 compadd -- {mcp_subs}
@@ -169,7 +186,8 @@ _ccpkg() {{
 }}
 _ccpkg "$@"
 """.format(verbs=verbs, presets=presets, status_subs=status_subs,
-           new_subs=new_subs, mcp_subs=mcp_subs, completions_vals=completions_vals)
+           new_subs=new_subs, mcp_subs=mcp_subs, suggest_subs=suggest_subs,
+           gallery_subs=gallery_subs, completions_vals=completions_vals)
 
 
 def render(shell):

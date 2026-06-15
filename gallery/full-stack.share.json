@@ -1,0 +1,26 @@
+{
+  "ccpkg_share": 1,
+  "ccpkg_version": "0.4.0",
+  "name": "full-stack",
+  "author": "example",
+  "description": "Front-to-back web: UI, API, data, and the whole review loop.",
+  "selected": [
+    "agents/a11y.md",
+    "agents/api-designer.md",
+    "agents/architect.md",
+    "agents/dba.md",
+    "agents/debugger.md",
+    "agents/frontend.md",
+    "agents/integrator.md",
+    "agents/perf.md",
+    "agents/refactor.md",
+    "agents/reviewer.md",
+    "agents/tester.md",
+    "commands/handoff.md",
+    "frontend-design",
+    "mboard",
+    "superpowers",
+    "understand-anything"
+  ],
+  "deselected": []
+}

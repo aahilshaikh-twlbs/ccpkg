@@ -1,0 +1,23 @@
+{
+  "ccpkg_share": 1,
+  "ccpkg_version": "0.4.0",
+  "name": "ai-researcher",
+  "author": "example",
+  "description": "Research & writing: gather, analyze, synthesize, ship docs.",
+  "selected": [
+    "agents/analyst.md",
+    "agents/experiment-designer.md",
+    "agents/notes-keeper.md",
+    "agents/pm.md",
+    "agents/researcher.md",
+    "agents/scraper.md",
+    "agents/scribe.md",
+    "agents/writer.md",
+    "anthropic-skills",
+    "mattpocock-skills",
+    "mboard",
+    "superpowers",
+    "understand-anything"
+  ],
+  "deselected": []
+}
