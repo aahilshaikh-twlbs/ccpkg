@@ -462,6 +462,21 @@ def _cmd_apply_share(root, home, env, os_name, source):
     return _cmd_install(root, home, env, os_name, selected_override=resolved)
 
 
+def _cmd_completions(shell):
+    # print a shell completion script (zsh|bash) or the dynamic `items` feed.
+    from . import completions
+    if shell == "items":
+        for path in completions.list_items():
+            print(path)
+        return 0
+    script = completions.render(shell)
+    if script is None:
+        print("usage: ccpkg completions {zsh,bash,items}", file=sys.stderr)
+        return 2
+    sys.stdout.write(script)
+    return 0
+
+
 def _build_parser():
     parser = argparse.ArgumentParser(prog="ccpkg")
     parser.add_argument(
@@ -511,6 +526,13 @@ def _build_parser():
         "share", help="export your setup to a shareable ccpkg.share.json")
     p_share.add_argument("out", nargs="?", default=None,
                          help="output path (default: ./ccpkg.share.json)")
+
+    # completions — print a shell completion script (or the dynamic items feed)
+    p_comp = sub.add_parser(
+        "completions", help="print a shell completion script (zsh|bash)")
+    p_comp.add_argument("shell", nargs="?", default=None,
+                        metavar="[zsh|bash|items]",
+                        help="zsh|bash prints a script; items lists manifest paths")
     return parser
 
 
@@ -555,5 +577,7 @@ def main(argv=None):
                               yes=getattr(args, "yes", False))
     if args.cmd == "share":
         return _cmd_share(root, home, env, os_name, getattr(args, "out", None))
+    if args.cmd == "completions":
+        return _cmd_completions(getattr(args, "shell", None))
     parser.print_help()
     return 2
