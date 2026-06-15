@@ -50,6 +50,10 @@ secret/PII scanning deterministically. Hand-editing risks drift and leaks.
   secret-scan). Never auto-commits.
 - `uninstall [--yes]` — remove managed files (restoring `*.ccpkg.bak` backups), drop the
   mboard runtime and saved profile. Confirms first unless `--yes`.
+- `share [out]` — export your selection to a portable, base-pure `ccpkg.share.json`. Commit
+  it to a repo and anyone reconstructs your setup with `ccpkg apply <repo-url>`. (`apply`
+  also accepts a git URL or a path to a share file — it previews + confirms before
+  installing, since adopting a setup installs its third-party plugins/packs/MCP servers.)
 
 ## Layers
 

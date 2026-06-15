@@ -393,15 +393,18 @@ def test_apply_ctrl_c_during_wizard_cancels(tmp_repo, tmp_home, monkeypatch, cap
     assert "cancelled" in capsys.readouterr().out.lower()
 
 
-def test_apply_parser_accepts_preset_positional():
+def test_apply_parser_accepts_source_positional():
     from ccpkg import cli
     parser = cli._build_parser()
+    # the positional is now a generic `source` (preset | url | path)
     for name in ("minimal", "recommended", "everything"):
         args = parser.parse_args(["apply", name])
-        assert args.preset == name
-    # default: no preset positional
+        assert args.source == name
+    args = parser.parse_args(["apply", "https://github.com/a/b"])
+    assert args.source == "https://github.com/a/b"
+    # default: no source
     args = parser.parse_args(["apply"])
-    assert args.preset is None
+    assert args.source is None
 
 
 def test_apply_everything_selects_all(tmp_repo, tmp_home, monkeypatch):
