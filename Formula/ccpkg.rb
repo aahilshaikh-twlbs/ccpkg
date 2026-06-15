@@ -1,8 +1,8 @@
 class Ccpkg < Formula
   desc "Claude Code environment-as-code installer"
   homepage "https://github.com/aahilshaikh-twlbs/ccpkg"
-  url "https://github.com/aahilshaikh-twlbs/ccpkg/archive/refs/tags/v0.4.0.tar.gz"
-  sha256 "4d8ea2b2e65cf79596101d1be9a0ccacb370f5a2b8e4ad9658906ca313581e31"
+  url "https://github.com/aahilshaikh-twlbs/ccpkg/archive/refs/tags/v0.5.0.tar.gz"
+  sha256 "c07e306f413b77e3ad651e117525fa362ad2e4081c4e3294a52cc79572e7f8de"
   license "MIT"
 
   depends_on "jq"
