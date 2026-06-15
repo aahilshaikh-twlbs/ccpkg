@@ -1,0 +1,18 @@
+{
+  "ccpkg_share": 1,
+  "ccpkg_version": "0.4.0",
+  "name": "minimalist",
+  "author": "example",
+  "description": "Lean: the core review loop + coordination, nothing else.",
+  "selected": [
+    "agents/architect.md",
+    "agents/debugger.md",
+    "agents/refactor.md",
+    "agents/reviewer.md",
+    "agents/tester.md",
+    "commands/handoff.md",
+    "mboard",
+    "superpowers"
+  ],
+  "deselected": []
+}

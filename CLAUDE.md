@@ -66,6 +66,15 @@ secret/PII scanning deterministically. Hand-editing risks drift and leaks.
   stay as `${VAR}` references that Claude Code expands at connect time — the catalog is
   base-pure. (Local MCP servers only; the `mcp__claude_ai_*` tools are remote claude.ai
   account integrations and are not managed here.)
+- `suggest` — detect the cwd project (langs/frameworks/infra/CI/git) and **auto-apply** the
+  Claude Code setup for it: recommended agents/skills/plugins (global install) + MCP servers
+  into `./.mcp.json`, no confirm. `suggest preview` shows the recommendation and changes
+  nothing. Detection + the signal→ids rules live in `ccpkg/suggest.py`; reuses the adopt path.
+- `score` — grade this machine's setup 0–100 (`ccpkg/score.py`, pure + reused by card/gallery):
+  core review loop, agent breadth, plugins/skills, coordination, commands; plus upgrade tips.
+- `card [out]` — render a shareable SVG card of the setup (`ccpkg/card.py`; reuses score).
+- `gallery` / `gallery index` — browse community setups under `gallery/*.share.json` (ranked by
+  score, adopt via `ccpkg apply gallery/<file>`); `gallery index` regenerates `GALLERY.md`.
 
 ## Layers
 

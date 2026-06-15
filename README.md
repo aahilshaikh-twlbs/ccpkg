@@ -73,6 +73,10 @@ ccpkg share                  # export your setup to a portable ccpkg.share.json 
 ccpkg completions zsh        # print a shell completion script (zsh|bash) to install yourself
 ccpkg mcp list               # browse the curated MCP-server catalog
 ccpkg mcp add github linear  # deep-merge servers into ./.mcp.json (secrets stay ${VAR} refs)
+ccpkg suggest                # detect this project & auto-configure Claude Code for it
+ccpkg score                  # grade your setup 0-100 with upgrade suggestions
+ccpkg card                   # render a shareable SVG card of your setup
+ccpkg gallery                # browse community setups, adopt any with one command
 ccpkg uninstall              # remove managed files, restore backups, drop mboard + profile
 ```
 
@@ -137,8 +141,8 @@ the repo's GitHub remote.
 ## Commands
 
 `ccpkg <verb>` (equivalently `python3 -m ccpkg <verb>` from a checkout; no third-party
-dependencies). The surface is eight verbs — `apply`, `status`, `new`, `push`, `uninstall`,
-`share`, `completions`, `mcp`:
+dependencies). The surface is twelve verbs — `apply`, `status`, `new`, `push`, `uninstall`,
+`share`, `completions`, `mcp`, `suggest`, `score`, `card`, `gallery`:
 
 | Verb | What it does |
 | --- | --- |
@@ -155,6 +159,10 @@ dependencies). The surface is eight verbs — `apply`, `status`, `new`, `push`, 
 | `completions [zsh\|bash\|items\|templates\|mcp]` | `zsh`/`bash` print a shell completion script to stdout (you install it; we never touch your rc). `items`/`templates`/`mcp` print the manifest paths / template names / MCP catalog ids the scripts use for TAB-time dynamic completion. |
 | `mcp list` | List the curated MCP-server catalog (id, transport, description); marks servers already in `./.mcp.json`. |
 | `mcp add <name...>` | Deep-merge catalog server(s) into the project-scope `./.mcp.json` (idempotent; preserves your existing servers). Credentials stay as `${VAR}` references; prints which env vars to set. Never touches `~/.claude.json`. |
+| `suggest` | Detect the current project (languages, frameworks, infra, CI) and **auto-configure** Claude Code for it — the right agents/skills/plugins applied + the right MCP servers wired into `./.mcp.json`. `suggest preview` shows the recommendation without applying. |
+| `score` | Grade your setup 0–100 (agent coverage, core review loop, plugins/skills, coordination, commands) and suggest concrete upgrades. |
+| `card [out]` | Render a shareable **SVG card** of your setup (score, grade, per-group counts) to embed in a README or post (default `./ccpkg-card.svg`). |
+| `gallery` | Browse community setups (ranked by score) and the one-command adopt for each. `gallery index` regenerates `GALLERY.md` from `gallery/*.share.json`. |
 
 ## Repository layout
 

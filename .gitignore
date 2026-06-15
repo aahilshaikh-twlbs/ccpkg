@@ -38,3 +38,6 @@ docs/superpowers/
 
 # stray project-scope MCP config (ccpkg mcp add writes this in cwd)
 .mcp.json
+
+# stray showcase card output (ccpkg card writes this in cwd)
+ccpkg-card.svg

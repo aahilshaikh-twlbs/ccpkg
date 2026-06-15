@@ -452,7 +452,7 @@ def _adopt_share(root, home, env, os_name, data):
     # Shared adopt path for both remote shared setups and shipped templates:
     # intersect with this machine's catalog, preview, confirm on a TTY, then
     # persist the selection as the profile and install it.
-    from . import share as share_mod, profile
+    from . import share as share_mod
     overlay_present = bool(env.get("OVERLAY_DIR") or env.get("OVERLAY_REPO"))
     resolved, preview, skipped = share_mod.resolve_selection(
         data, root, overlay_present)
@@ -476,10 +476,113 @@ def _adopt_share(root, home, env, os_name, data):
         if resp not in ("y", "yes"):
             print("apply cancelled")
             return 130
+    return _install_selection(root, home, env, os_name, resolved, overlay_present)
+
+
+def _install_selection(root, home, env, os_name, resolved, overlay_present):
+    # Persist a resolved id-set as this machine's profile, then install it.
+    # The no-confirm core shared by adopt (_adopt_share) and `suggest`.
+    from . import share as share_mod, profile
     all_ids = share_mod.catalog_ids(root, overlay_present)
     profile.save(home, profile.Profile(
         selected=sorted(resolved), deselected=sorted(all_ids - resolved)))
     return _cmd_install(root, home, env, os_name, selected_override=resolved)
+
+
+def _cmd_gallery(root, home, env, os_name, action):
+    # browse community setups, or regenerate the GALLERY.md index.
+    from . import gallery as gallery_mod
+    overlay_present = bool(env.get("OVERLAY_DIR") or env.get("OVERLAY_REPO"))
+    if action == "index":
+        path = gallery_mod.write_index(root, overlay_present)
+        print("wrote {0}".format(path))
+        return 0
+    entries = gallery_mod.list_entries(root, overlay_present)
+    if not entries:
+        print("no gallery entries yet (add a gallery/<name>.share.json)")
+        return 0
+    print("Community setups (ranked):")
+    for e in entries:
+        print("  {0}/100 {1}  {2}\t{3}".format(
+            e["score"], e["grade"], e["name"], e["description"]))
+        print("        adopt: ccpkg apply gallery/{0}".format(e["file"]))
+    return 0
+
+
+def _cmd_card(root, home, env, os_name, out):
+    # render a shareable SVG card of this setup to a file.
+    from . import card as card_mod
+    overlay_present = bool(env.get("OVERLAY_DIR") or env.get("OVERLAY_REPO"))
+    stats = card_mod.build_stats(root, home, overlay_present)
+    svg = card_mod.render_svg(stats)
+    out_path = out or os.path.join(os.getcwd(), "ccpkg-card.svg")
+    try:
+        with open(out_path, "w", encoding="utf-8") as fh:
+            fh.write(svg)
+    except OSError as exc:
+        print("ccpkg card: {0}".format(exc), file=sys.stderr)
+        return 1
+    print("wrote {0}  (score {1}/100, grade {2})".format(
+        out_path, stats["score"], stats["grade"]))
+    print("embed it:  ![my Claude Code setup]({0})".format(
+        os.path.basename(out_path)))
+    return 0
+
+
+def _cmd_score(root, home, env, os_name):
+    # grade this machine's setup (saved profile, or the default-on set) 0-100.
+    from . import share as share_mod, score as score_mod
+    overlay_present = bool(env.get("OVERLAY_DIR") or env.get("OVERLAY_REPO"))
+    selected = set(share_mod.export_setup(root, home, overlay_present)["selected"])
+    catalog = share_mod._catalog(root, overlay_present)
+    r = score_mod.analyze(selected, catalog)
+    print("Your setup: {0} / 100  ({1})".format(r.score, r.grade))
+    for name, got, mx in r.dimensions:
+        filled = int(round(10 * got / mx)) if mx else 0
+        bar = "#" * filled + "-" * (10 - filled)
+        print("  [{0}] {1:<22} {2}/{3}".format(bar, name, got, mx))
+    if r.strengths:
+        print("strengths:")
+        for s in r.strengths:
+            print("  + " + s)
+    if r.suggestions:
+        print("suggestions:")
+        for s in r.suggestions:
+            print("  - " + s)
+    return 0
+
+
+def _cmd_suggest(root, home, env, os_name, action):
+    # detect the cwd project and configure Claude Code for it. Default = apply;
+    # `suggest preview` shows the recommendation and changes nothing.
+    from . import suggest as suggest_mod, share as share_mod, mcp as mcp_mod
+    overlay_present = bool(env.get("OVERLAY_DIR") or env.get("OVERLAY_REPO"))
+    signals = suggest_mod.detect(os.getcwd())
+    cat = share_mod._catalog(root, overlay_present)
+    selected, mcp_ids, rationale = suggest_mod.recommend(signals, set(cat))
+    valid_mcp = [m for m in mcp_ids if m in mcp_mod.by_id()]
+
+    print("Detected: {0}".format(", ".join(sorted(signals)) or "no strong signals"))
+    why = {r["id"]: r["why"] for r in rationale}
+    print("Recommended setup ({0} items):".format(len(selected) + len(valid_mcp)))
+    for sid in selected:
+        group = cat.get(sid, ("", ""))[0]
+        print("  [{0}] {1}\t{2}".format(group, sid, why.get(sid, "")))
+    for m in valid_mcp:
+        print("  [MCP] {0}\t-> ./.mcp.json".format(m))
+
+    if action == "preview":
+        print("\n(preview only — nothing applied; run `ccpkg suggest` to apply)")
+        return 0
+
+    if valid_mcp:
+        mcp_mod.apply_servers(valid_mcp, mcp_mod.mcp_json_path())
+        print("wrote {0} MCP server(s) to ./.mcp.json".format(len(valid_mcp)))
+    rc = _install_selection(root, home, env, os_name, set(selected), overlay_present)
+    if rc == 0:
+        print("configured Claude Code for this project "
+              "({0} items applied)".format(len(selected)))
+    return rc
 
 
 def _cmd_mcp(action, names):
@@ -595,6 +698,25 @@ def _build_parser():
     p_share.add_argument("out", nargs="?", default=None,
                          help="output path (default: ./ccpkg.share.json)")
 
+    # score — grade this machine's setup 0-100 with upgrade suggestions
+    sub.add_parser("score", help="grade your Claude Code setup 0-100 + suggest upgrades")
+
+    # card — render a shareable SVG card of this setup
+    p_card = sub.add_parser("card", help="render a shareable SVG card of your setup")
+    p_card.add_argument("out", nargs="?", default=None,
+                        help="output path (default: ./ccpkg-card.svg)")
+
+    # gallery — browse community setups; `gallery index` regenerates GALLERY.md
+    p_gallery = sub.add_parser("gallery", help="browse community setups to adopt")
+    gal_sub = p_gallery.add_subparsers(dest="gallery_action")
+    gal_sub.add_parser("index", help="regenerate GALLERY.md from gallery/*.share.json")
+
+    # suggest — detect the cwd project and auto-configure Claude Code for it
+    p_suggest = sub.add_parser(
+        "suggest", help="detect this project and auto-configure Claude Code for it")
+    sug_sub = p_suggest.add_subparsers(dest="suggest_action")
+    sug_sub.add_parser("preview", help="show the recommendation without applying")
+
     # mcp — manage curated MCP servers in the project-scope ./.mcp.json
     p_mcp = sub.add_parser("mcp", help="manage curated MCP servers in ./.mcp.json")
     mcp_sub = p_mcp.add_subparsers(dest="mcp_action")
@@ -660,6 +782,16 @@ def main(argv=None):
                               yes=getattr(args, "yes", False))
     if args.cmd == "share":
         return _cmd_share(root, home, env, os_name, getattr(args, "out", None))
+    if args.cmd == "score":
+        return _cmd_score(root, home, env, os_name)
+    if args.cmd == "card":
+        return _cmd_card(root, home, env, os_name, getattr(args, "out", None))
+    if args.cmd == "gallery":
+        return _cmd_gallery(root, home, env, os_name,
+                            getattr(args, "gallery_action", None))
+    if args.cmd == "suggest":
+        return _cmd_suggest(root, home, env, os_name,
+                            getattr(args, "suggest_action", None))
     if args.cmd == "mcp":
         return _cmd_mcp(getattr(args, "mcp_action", None),
                         getattr(args, "names", []))
