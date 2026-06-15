@@ -1,0 +1,31 @@
+{
+  "ccpkg_share": 1,
+  "ccpkg_version": "0.4.0",
+  "name": "research",
+  "description": "Research & writing: gather, analyze, synthesize, and document.",
+  "selected": [
+    "CLAUDE.md",
+    "agents/analyst.md",
+    "agents/docs.md",
+    "agents/experiment-designer.md",
+    "agents/notes-keeper.md",
+    "agents/pm.md",
+    "agents/prompt-engineer.md",
+    "agents/researcher.md",
+    "agents/scraper.md",
+    "agents/scribe.md",
+    "agents/writer.md",
+    "anthropic-skills",
+    "commands/handoff.md",
+    "mattpocock-skills",
+    "mboard",
+    "monthly-cost.sh",
+    "settings.json",
+    "settings.local.json.tmpl",
+    "statusline.sh",
+    "superpowers",
+    "understand-anything",
+    "yearly-cost.sh"
+  ],
+  "deselected": []
+}

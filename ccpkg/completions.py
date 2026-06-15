@@ -20,7 +20,7 @@ from . import manifest
 APPLY_PRESETS = ("minimal", "recommended", "everything")
 
 # completions' own value words (this verb's positional is freeform in argparse).
-COMPLETIONS_VALUES = ("zsh", "bash", "items")
+COMPLETIONS_VALUES = ("zsh", "bash", "items", "templates")
 
 
 def _subparsers_action(parser):
@@ -92,7 +92,7 @@ _ccpkg() {{
     verb="${{COMP_WORDS[1]}}"
     case "$verb" in
         apply)
-            [ "$COMP_CWORD" -eq 2 ] && COMPREPLY=( $(compgen -W "{presets}" -- "$cur") )
+            [ "$COMP_CWORD" -eq 2 ] && COMPREPLY=( $(compgen -W "{presets} $(ccpkg completions templates 2>/dev/null)" -- "$cur") )
             ;;
         status)
             if [ "$COMP_CWORD" -eq 2 ]; then
@@ -134,7 +134,7 @@ _ccpkg() {{
     local verb=${{words[2]}}
     case $verb in
         apply)
-            (( CURRENT == 3 )) && compadd -- {presets}
+            (( CURRENT == 3 )) && compadd -- {presets} ${{(f)"$(ccpkg completions templates 2>/dev/null)"}}
             ;;
         status)
             if (( CURRENT == 3 )); then

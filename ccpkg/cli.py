@@ -426,17 +426,38 @@ def _cmd_share(root, home, env, os_name, out):
 
 
 def _cmd_apply_share(root, home, env, os_name, source):
-    from . import share as share_mod, profile
-    overlay_present = bool(env.get("OVERLAY_DIR") or env.get("OVERLAY_REPO"))
+    from . import share as share_mod
     try:
         data = share_mod.fetch_share(source)
     except ValueError as exc:
         print("ccpkg apply: {0}".format(exc), file=sys.stderr)
         return 2
+    return _adopt_share(root, home, env, os_name, data)
+
+
+def _cmd_apply_template(root, home, env, os_name, name):
+    from . import templates as templates_mod
+    data = templates_mod.resolve_template(name, root)
+    if data is None:
+        print("ccpkg apply: unknown template: {0}".format(name), file=sys.stderr)
+        return 2
+    print("Starter template: {0}".format(name))
+    desc = data.get("description")
+    if desc:
+        print("  " + desc)
+    return _adopt_share(root, home, env, os_name, data)
+
+
+def _adopt_share(root, home, env, os_name, data):
+    # Shared adopt path for both remote shared setups and shipped templates:
+    # intersect with this machine's catalog, preview, confirm on a TTY, then
+    # persist the selection as the profile and install it.
+    from . import share as share_mod, profile
+    overlay_present = bool(env.get("OVERLAY_DIR") or env.get("OVERLAY_REPO"))
     resolved, preview, skipped = share_mod.resolve_selection(
         data, root, overlay_present)
     if not resolved:
-        print("ccpkg apply: nothing in this shared setup is available in your "
+        print("ccpkg apply: nothing in this setup is available in your "
               "catalog", file=sys.stderr)
         return 1
     print("This setup installs {0} item(s):".format(len(preview)))
@@ -445,8 +466,8 @@ def _cmd_apply_share(root, home, env, os_name, source):
     if skipped:
         print("note: {0} not in your catalog, skipped: {1}".format(
             len(skipped), ", ".join(skipped)))
-    # Trust gate: adopting a remote setup runs the installer (third-party
-    # plugins / packs / MCP servers). Confirm on a TTY; CI/non-interactive runs.
+    # Trust gate: adopting a setup runs the installer (third-party plugins /
+    # packs / MCP servers). Confirm on a TTY; CI/non-interactive runs straight.
     if _stdin_is_tty():
         try:
             resp = input("Apply this setup? [y/N] ").strip().lower()
@@ -455,7 +476,6 @@ def _cmd_apply_share(root, home, env, os_name, source):
         if resp not in ("y", "yes"):
             print("apply cancelled")
             return 130
-    # Adopt = persist as this machine's profile, then install the selection.
     all_ids = share_mod.catalog_ids(root, overlay_present)
     profile.save(home, profile.Profile(
         selected=sorted(resolved), deselected=sorted(all_ids - resolved)))
@@ -469,9 +489,15 @@ def _cmd_completions(shell):
         for path in completions.list_items():
             print(path)
         return 0
+    if shell == "templates":
+        from . import templates as templates_mod
+        for name in templates_mod.list_templates():
+            print(name)
+        return 0
     script = completions.render(shell)
     if script is None:
-        print("usage: ccpkg completions {zsh,bash,items}", file=sys.stderr)
+        print("usage: ccpkg completions {zsh,bash,items,templates}",
+              file=sys.stderr)
         return 2
     sys.stdout.write(script)
     return 0
@@ -487,9 +513,10 @@ def _build_parser():
     p_apply = sub.add_parser(
         "apply", help="install / re-apply, a preset, or adopt a shared setup")
     p_apply.add_argument(
-        "source", nargs="?", default=None, metavar="[preset|url|path]",
-        help="a preset (minimal|recommended|everything), a shared setup's git "
-             "URL or path, or omit for the interactive picker")
+        "source", nargs="?", default=None, metavar="[preset|template|url|path]",
+        help="a preset (minimal|recommended|everything), a starter template "
+             "name, a shared setup's git URL or path, or omit for the "
+             "interactive picker")
 
     # status — inspect: drift (default) + diff / health / scan sub-verbs
     p_status = sub.add_parser("status", help="inspect: drift / diff / health / scan")
@@ -531,8 +558,9 @@ def _build_parser():
     p_comp = sub.add_parser(
         "completions", help="print a shell completion script (zsh|bash)")
     p_comp.add_argument("shell", nargs="?", default=None,
-                        metavar="[zsh|bash|items]",
-                        help="zsh|bash prints a script; items lists manifest paths")
+                        metavar="[zsh|bash|items|templates]",
+                        help="zsh|bash prints a script; items/templates list "
+                             "manifest paths / template names (TAB-time feeds)")
     return parser
 
 
@@ -550,6 +578,11 @@ def main(argv=None):
         if source is None or source in ("minimal", "recommended", "everything"):
             return _cmd_install(root, home, env, os_name, yes=False,
                                 reconfigure=False, preset=source)
+        # a known starter-template name -> adopt its shipped share file;
+        # otherwise treat the source as a git URL or local path.
+        from . import templates as templates_mod
+        if source in templates_mod.list_templates(root):
+            return _cmd_apply_template(root, home, env, os_name, source)
         return _cmd_apply_share(root, home, env, os_name, source)
     if args.cmd == "status":
         action = getattr(args, "status_action", None)
