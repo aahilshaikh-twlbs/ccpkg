@@ -20,7 +20,7 @@ from . import manifest
 APPLY_PRESETS = ("minimal", "recommended", "everything")
 
 # completions' own value words (this verb's positional is freeform in argparse).
-COMPLETIONS_VALUES = ("zsh", "bash", "items")
+COMPLETIONS_VALUES = ("zsh", "bash", "items", "templates", "mcp")
 
 
 def _subparsers_action(parser):
@@ -77,6 +77,7 @@ def bash_script():
     verbs = " ".join(tree.keys())
     status_subs = " ".join(tree.get("status", []))
     new_subs = " ".join(tree.get("new", []))
+    mcp_subs = " ".join(tree.get("mcp", []))
     presets = " ".join(APPLY_PRESETS)
     completions_vals = " ".join(COMPLETIONS_VALUES)
     return """\
@@ -92,7 +93,7 @@ _ccpkg() {{
     verb="${{COMP_WORDS[1]}}"
     case "$verb" in
         apply)
-            [ "$COMP_CWORD" -eq 2 ] && COMPREPLY=( $(compgen -W "{presets}" -- "$cur") )
+            [ "$COMP_CWORD" -eq 2 ] && COMPREPLY=( $(compgen -W "{presets} $(ccpkg completions templates 2>/dev/null)" -- "$cur") )
             ;;
         status)
             if [ "$COMP_CWORD" -eq 2 ]; then
@@ -104,6 +105,13 @@ _ccpkg() {{
         new)
             [ "$COMP_CWORD" -eq 2 ] && COMPREPLY=( $(compgen -W "{new_subs}" -- "$cur") )
             ;;
+        mcp)
+            if [ "$COMP_CWORD" -eq 2 ]; then
+                COMPREPLY=( $(compgen -W "{mcp_subs}" -- "$cur") )
+            elif [ "$COMP_CWORD" -ge 3 ] && [ "${{COMP_WORDS[2]}}" = "add" ]; then
+                COMPREPLY=( $(compgen -W "$(ccpkg completions mcp 2>/dev/null)" -- "$cur") )
+            fi
+            ;;
         completions)
             [ "$COMP_CWORD" -eq 2 ] && COMPREPLY=( $(compgen -W "{completions_vals}" -- "$cur") )
             ;;
@@ -111,7 +119,7 @@ _ccpkg() {{
 }}
 complete -F _ccpkg ccpkg
 """.format(verbs=verbs, presets=presets, status_subs=status_subs,
-           new_subs=new_subs, completions_vals=completions_vals)
+           new_subs=new_subs, mcp_subs=mcp_subs, completions_vals=completions_vals)
 
 
 def zsh_script():
@@ -120,6 +128,7 @@ def zsh_script():
     verbs = " ".join(tree.keys())
     status_subs = " ".join(tree.get("status", []))
     new_subs = " ".join(tree.get("new", []))
+    mcp_subs = " ".join(tree.get("mcp", []))
     presets = " ".join(APPLY_PRESETS)
     completions_vals = " ".join(COMPLETIONS_VALUES)
     return """\
@@ -134,7 +143,7 @@ _ccpkg() {{
     local verb=${{words[2]}}
     case $verb in
         apply)
-            (( CURRENT == 3 )) && compadd -- {presets}
+            (( CURRENT == 3 )) && compadd -- {presets} ${{(f)"$(ccpkg completions templates 2>/dev/null)"}}
             ;;
         status)
             if (( CURRENT == 3 )); then
@@ -146,6 +155,13 @@ _ccpkg() {{
         new)
             (( CURRENT == 3 )) && compadd -- {new_subs}
             ;;
+        mcp)
+            if (( CURRENT == 3 )); then
+                compadd -- {mcp_subs}
+            elif (( CURRENT >= 4 )) && [[ ${{words[3]}} == add ]]; then
+                compadd -- ${{(f)"$(ccpkg completions mcp 2>/dev/null)"}}
+            fi
+            ;;
         completions)
             (( CURRENT == 3 )) && compadd -- {completions_vals}
             ;;
@@ -153,7 +169,7 @@ _ccpkg() {{
 }}
 _ccpkg "$@"
 """.format(verbs=verbs, presets=presets, status_subs=status_subs,
-           new_subs=new_subs, completions_vals=completions_vals)
+           new_subs=new_subs, mcp_subs=mcp_subs, completions_vals=completions_vals)
 
 
 def render(shell):

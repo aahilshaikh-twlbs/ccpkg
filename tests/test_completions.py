@@ -19,6 +19,7 @@ def test_command_tree_has_every_verb():
     tree = completions.command_tree()
     assert set(tree) == {
         "apply", "status", "new", "push", "uninstall", "share", "completions",
+        "mcp",
     }
 
 
@@ -26,6 +27,7 @@ def test_command_tree_subverbs_match_parser():
     tree = completions.command_tree()
     assert tree["status"] == ["diff", "health", "scan"]
     assert tree["new"] == ["agent", "command", "hook", "skill", "overlay"]
+    assert tree["mcp"] == ["list", "add"]
     # verbs whose positional is freeform (not a subparser) have no sub-verbs
     for verb in ("apply", "push", "uninstall", "share", "completions"):
         assert tree[verb] == []
@@ -39,7 +41,7 @@ def test_script_mentions_every_verb_and_subverb(render):
     tree = completions.command_tree()
     for verb in tree:
         assert verb in script, "verb %r missing from script" % verb
-    for sub in tree["status"] + tree["new"]:
+    for sub in tree["status"] + tree["new"] + tree["mcp"]:
         assert sub in script, "sub-verb %r missing from script" % sub
     for preset in completions.APPLY_PRESETS:
         assert preset in script

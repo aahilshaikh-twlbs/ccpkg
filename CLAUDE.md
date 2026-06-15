@@ -32,12 +32,14 @@ secret/PII scanning deterministically. Hand-editing risks drift and leaks.
 
 `python3 -m ccpkg <verb>`:
 
-- `apply [minimal|recommended|everything]` — install / re-apply the environment
-  (idempotent): load `local.env`, ensure OS deps, apply the base layer, apply the private
-  overlay if configured, reinstall plugins, install the vendored mboard, scan for
+- `apply [minimal|recommended|everything|<template>|<url>|<path>]` — install / re-apply the
+  environment (idempotent): load `local.env`, ensure OS deps, apply the base layer, apply the
+  private overlay if configured, reinstall plugins, install the vendored mboard, scan for
   secrets/PII, and print re-auth instructions. Opens an interactive feature picker when run
   in a terminal with no preset; runs headlessly when given a preset or when stdin is not a
-  TTY. Re-running reopens the picker, so there is no separate lightweight re-apply.
+  TTY. Re-running reopens the picker, so there is no separate lightweight re-apply. A
+  **starter-template name** (`web-dev`/`backend`/`research`/`the-works`, shipped under
+  `templates/`) applies a curated persona by adopting its committed `ccpkg.share.json`.
 - `status` — drift summary between the repo and the live `~/.claude` (the default).
   - `status diff [item]` — content diff for managed items.
   - `status health` — deps/profile/mboard/drift health report.
@@ -54,6 +56,16 @@ secret/PII scanning deterministically. Hand-editing risks drift and leaks.
   it to a repo and anyone reconstructs your setup with `ccpkg apply <repo-url>`. (`apply`
   also accepts a git URL or a path to a share file — it previews + confirms before
   installing, since adopting a setup installs its third-party plugins/packs/MCP servers.)
+- `completions [zsh|bash|items|templates|mcp]` — `zsh`/`bash` print a shell completion script
+  to stdout (you install it; ccpkg never edits your shell rc). The verb tree is introspected
+  from the live parser, so it can't drift. `items`/`templates`/`mcp` print the manifest paths
+  / template names / MCP catalog ids the generated scripts call for TAB-time completion.
+- `mcp list` / `mcp add <name...>` — manage a curated catalog of MCP servers in the
+  **project-scope `./.mcp.json`** (deep-merge, idempotent, preserves your own servers).
+  Deliberately never writes `~/.claude.json` (Claude Code's mutable state file). Credentials
+  stay as `${VAR}` references that Claude Code expands at connect time — the catalog is
+  base-pure. (Local MCP servers only; the `mcp__claude_ai_*` tools are remote claude.ai
+  account integrations and are not managed here.)
 
 ## Layers
 

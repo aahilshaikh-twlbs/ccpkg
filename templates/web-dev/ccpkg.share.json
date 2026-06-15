@@ -1,0 +1,31 @@
+{
+  "ccpkg_share": 1,
+  "ccpkg_version": "0.4.0",
+  "name": "web-dev",
+  "description": "Front-end / full-stack: UI, accessibility, API design, and the review loop.",
+  "selected": [
+    "CLAUDE.md",
+    "agents/a11y.md",
+    "agents/api-designer.md",
+    "agents/architect.md",
+    "agents/debugger.md",
+    "agents/frontend.md",
+    "agents/implementer.md",
+    "agents/integrator.md",
+    "agents/perf.md",
+    "agents/refactor.md",
+    "agents/reviewer.md",
+    "agents/tester.md",
+    "agents/types.md",
+    "commands/handoff.md",
+    "frontend-design",
+    "mboard",
+    "monthly-cost.sh",
+    "settings.json",
+    "settings.local.json.tmpl",
+    "statusline.sh",
+    "superpowers",
+    "yearly-cost.sh"
+  ],
+  "deselected": []
+}

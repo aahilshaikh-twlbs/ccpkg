@@ -67,8 +67,12 @@ keystroke, or *Custom* to walk each group. After applying, a summary screen reca
 ```text
 ccpkg apply                  # interactive picker (preset screen, pre-filled on a re-run)
 ccpkg apply recommended      # headless preset: minimal | recommended | everything
+ccpkg apply web-dev          # apply a curated starter template (web-dev|backend|research|the-works)
 ccpkg apply <repo-url>       # adopt someone else's shared setup — a one-command fork
 ccpkg share                  # export your setup to a portable ccpkg.share.json to publish
+ccpkg completions zsh        # print a shell completion script (zsh|bash) to install yourself
+ccpkg mcp list               # browse the curated MCP-server catalog
+ccpkg mcp add github linear  # deep-merge servers into ./.mcp.json (secrets stay ${VAR} refs)
 ccpkg uninstall              # remove managed files, restore backups, drop mboard + profile
 ```
 
@@ -133,11 +137,12 @@ the repo's GitHub remote.
 ## Commands
 
 `ccpkg <verb>` (equivalently `python3 -m ccpkg <verb>` from a checkout; no third-party
-dependencies). The surface is five verbs — `apply`, `status`, `new`, `push`, `uninstall`:
+dependencies). The surface is eight verbs — `apply`, `status`, `new`, `push`, `uninstall`,
+`share`, `completions`, `mcp`:
 
 | Verb | What it does |
 | --- | --- |
-| `apply [preset\|url\|path]` | Install / re-apply (idempotent): deps, base, overlay, plugins, mboard, scan, re-auth notes. Opens the picker (pre-filled on a re-run) in a terminal with no argument; headless with a preset or when stdin is not a TTY. A **git URL or a path to a `ccpkg.share.json`** adopts someone else's shared setup (previews + confirms first). |
+| `apply [preset\|template\|url\|path]` | Install / re-apply (idempotent): deps, base, overlay, plugins, mboard, scan, re-auth notes. Opens the picker (pre-filled on a re-run) in a terminal with no argument; headless with a preset or when stdin is not a TTY. A **starter-template name** (`web-dev`, `backend`, `research`, `the-works`) applies a curated persona; a **git URL or path to a `ccpkg.share.json`** adopts someone else's shared setup (previews + confirms first). |
 | `status` | Per-file drift summary between the repo and live `~/.claude` (the default). |
 | `status diff [item]` | Content diff for managed items. |
 | `status health` | Environment health report: deps, profile, mboard state, and a drift summary. |
@@ -147,6 +152,9 @@ dependencies). The surface is five verbs — `apply`, `status`, `new`, `push`, `
 | `push [paths...]` | Capture changed live files into the right layer; reverse-templatize machine values; secret-scan. No auto-commit. Requires a git checkout. |
 | `uninstall [--yes]` | Remove managed files from `~/.claude` (restoring `*.ccpkg.bak` backups), drop the mboard runtime + saved profile. Confirms first; `--yes` to skip. Never deletes `settings.json` outright. |
 | `share [out]` | Export your selection to a portable, base-pure `ccpkg.share.json` (default `./`). Commit it to a repo and anyone runs `ccpkg apply <repo-url>` to reconstruct your setup — a one-command fork of your Claude Code env. |
+| `completions [zsh\|bash\|items\|templates\|mcp]` | `zsh`/`bash` print a shell completion script to stdout (you install it; we never touch your rc). `items`/`templates`/`mcp` print the manifest paths / template names / MCP catalog ids the scripts use for TAB-time dynamic completion. |
+| `mcp list` | List the curated MCP-server catalog (id, transport, description); marks servers already in `./.mcp.json`. |
+| `mcp add <name...>` | Deep-merge catalog server(s) into the project-scope `./.mcp.json` (idempotent; preserves your existing servers). Credentials stay as `${VAR}` references; prints which env vars to set. Never touches `~/.claude.json`. |
 
 ## Repository layout
 
