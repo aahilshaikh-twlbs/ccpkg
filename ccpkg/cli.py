@@ -482,6 +482,42 @@ def _adopt_share(root, home, env, os_name, data):
     return _cmd_install(root, home, env, os_name, selected_override=resolved)
 
 
+def _cmd_mcp(action, names):
+    # manage curated MCP servers in the project-scope ./.mcp.json (cwd).
+    from . import mcp as mcp_mod
+    if action == "list":
+        present = mcp_mod.present_ids(mcp_mod.mcp_json_path())
+        for srv in mcp_mod.MCP_CATALOG:
+            mark = "*" if srv.id in present else " "
+            print("{0} {1:<14} {2:<5} {3}".format(
+                mark, srv.id, srv.transport, srv.desc))
+        print("\n* = already in ./.mcp.json    add: ccpkg mcp add <name>")
+        return 0
+    if action == "add":
+        if not names:
+            print("usage: ccpkg mcp add <name> [name ...]", file=sys.stderr)
+            return 2
+        unknown = [n for n in names if n not in mcp_mod.by_id()]
+        if unknown:
+            print("ccpkg mcp: unknown server(s): {0}".format(", ".join(unknown)),
+                  file=sys.stderr)
+            print("known: {0}".format(", ".join(mcp_mod.catalog_ids())),
+                  file=sys.stderr)
+            return 2
+        result = mcp_mod.apply_servers(names, mcp_mod.mcp_json_path())
+        for label in ("added", "updated", "present"):
+            if result[label]:
+                print("{0}: {1}".format(label, ", ".join(result[label])))
+        print("-> {0}".format(result["path"]))
+        if result["vars"]:
+            print("set these env vars (shell profile or ~/.claude/settings.local.json):")
+            for v in result["vars"]:
+                print("  ${0}".format(v))
+        return 0
+    print("usage: ccpkg mcp {list,add}", file=sys.stderr)
+    return 2
+
+
 def _cmd_completions(shell):
     # print a shell completion script (zsh|bash) or the dynamic `items` feed.
     from . import completions
@@ -494,9 +530,14 @@ def _cmd_completions(shell):
         for name in templates_mod.list_templates():
             print(name)
         return 0
+    if shell == "mcp":
+        from . import mcp as mcp_mod
+        for sid in mcp_mod.catalog_ids():
+            print(sid)
+        return 0
     script = completions.render(shell)
     if script is None:
-        print("usage: ccpkg completions {zsh,bash,items,templates}",
+        print("usage: ccpkg completions {zsh,bash,items,templates,mcp}",
               file=sys.stderr)
         return 2
     sys.stdout.write(script)
@@ -554,6 +595,15 @@ def _build_parser():
     p_share.add_argument("out", nargs="?", default=None,
                          help="output path (default: ./ccpkg.share.json)")
 
+    # mcp — manage curated MCP servers in the project-scope ./.mcp.json
+    p_mcp = sub.add_parser("mcp", help="manage curated MCP servers in ./.mcp.json")
+    mcp_sub = p_mcp.add_subparsers(dest="mcp_action")
+    mcp_sub.add_parser("list", help="list the curated MCP-server catalog")
+    p_mcp_add = mcp_sub.add_parser(
+        "add", help="deep-merge catalog server(s) into ./.mcp.json")
+    p_mcp_add.add_argument("names", nargs="*", metavar="name",
+                           help="catalog server id(s) to add")
+
     # completions — print a shell completion script (or the dynamic items feed)
     p_comp = sub.add_parser(
         "completions", help="print a shell completion script (zsh|bash)")
@@ -610,6 +660,9 @@ def main(argv=None):
                               yes=getattr(args, "yes", False))
     if args.cmd == "share":
         return _cmd_share(root, home, env, os_name, getattr(args, "out", None))
+    if args.cmd == "mcp":
+        return _cmd_mcp(getattr(args, "mcp_action", None),
+                        getattr(args, "names", []))
     if args.cmd == "completions":
         return _cmd_completions(getattr(args, "shell", None))
     parser.print_help()
