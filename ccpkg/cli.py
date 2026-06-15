@@ -139,7 +139,7 @@ def _preset_ids(items, sels, overlay_present, preset):
 
 
 def _cmd_install(root, home, env, os_name, yes=False, reconfigure=False,
-                 preset=None):
+                 preset=None, selected_override=None):
     from . import manifest, selectables, selection, profile, wizard
 
     items = manifest.parse(config.manifest_path(root))
@@ -147,15 +147,19 @@ def _cmd_install(root, home, env, os_name, yes=False, reconfigure=False,
         env.get("OVERLAY_DIR") or env.get("OVERLAY_REPO")
     )
     prof = profile.load(home)
-    # A --preset selection is headless by definition: it names the id-set
-    # directly and skips both the wizard and the profile (like --yes).
-    is_tty = (not yes) and (preset is None) and _stdin_is_tty()
+    # A --preset or an adopted-share selection is headless by definition: it
+    # names the id-set directly and skips both the wizard and the profile here.
+    is_tty = (selected_override is None) and (not yes) and (preset is None) \
+        and _stdin_is_tty()
 
     def _run_wizard(stages, preselected):
         # `existing` drives the splash status line (re-run vs fresh install).
         return wizard.run_wizard(stages, preselected, existing=prof is not None)
 
-    if preset is not None:
+    if selected_override is not None:
+        # Adopting a shared setup: the caller already resolved + persisted it.
+        selected = set(selected_override)
+    elif preset is not None:
         selected = _preset_ids(items, selectables.SELECTABLES,
                                overlay_present, preset)
     else:
@@ -399,6 +403,65 @@ def _cmd_diff(root, home, env, os_name, item):
     return 1 if drifted else 0
 
 
+def _cmd_share(root, home, env, os_name, out):
+    from . import share as share_mod, scan
+    overlay_present = bool(env.get("OVERLAY_DIR") or env.get("OVERLAY_REPO"))
+    data = share_mod.export_setup(root, home, overlay_present)
+    # ids + labels from the public catalog -> base-pure by construction; verify
+    # before publishing (ccpkg never emits a shareable file it hasn't scanned).
+    findings = scan.scan_text_purity(
+        json.dumps(data), scan.load_purity_terms(root), share_mod.SHARE_FILENAME)
+    if findings:
+        _print_findings(findings)
+        print("error: refusing to write a share file with purity findings",
+              file=sys.stderr)
+        return 1
+    out_path = out or os.path.join(os.getcwd(), share_mod.SHARE_FILENAME)
+    share_mod.write_share(data, out_path)
+    print("wrote {0}  ({1} items)".format(out_path, len(data["selected"])))
+    print("share it: commit this to a repo, then anyone runs "
+          "`ccpkg apply <repo-url>`  (or `ccpkg apply {0}`).".format(
+              os.path.basename(out_path)))
+    return 0
+
+
+def _cmd_apply_share(root, home, env, os_name, source):
+    from . import share as share_mod, profile
+    overlay_present = bool(env.get("OVERLAY_DIR") or env.get("OVERLAY_REPO"))
+    try:
+        data = share_mod.fetch_share(source)
+    except ValueError as exc:
+        print("ccpkg apply: {0}".format(exc), file=sys.stderr)
+        return 2
+    resolved, preview, skipped = share_mod.resolve_selection(
+        data, root, overlay_present)
+    if not resolved:
+        print("ccpkg apply: nothing in this shared setup is available in your "
+              "catalog", file=sys.stderr)
+        return 1
+    print("This setup installs {0} item(s):".format(len(preview)))
+    for it in preview:
+        print("  [{0}] {1}\t{2}".format(it["group"], it["id"], it["desc"]))
+    if skipped:
+        print("note: {0} not in your catalog, skipped: {1}".format(
+            len(skipped), ", ".join(skipped)))
+    # Trust gate: adopting a remote setup runs the installer (third-party
+    # plugins / packs / MCP servers). Confirm on a TTY; CI/non-interactive runs.
+    if _stdin_is_tty():
+        try:
+            resp = input("Apply this setup? [y/N] ").strip().lower()
+        except EOFError:
+            resp = ""
+        if resp not in ("y", "yes"):
+            print("apply cancelled")
+            return 130
+    # Adopt = persist as this machine's profile, then install the selection.
+    all_ids = share_mod.catalog_ids(root, overlay_present)
+    profile.save(home, profile.Profile(
+        selected=sorted(resolved), deselected=sorted(all_ids - resolved)))
+    return _cmd_install(root, home, env, os_name, selected_override=resolved)
+
+
 def _build_parser():
     parser = argparse.ArgumentParser(prog="ccpkg")
     parser.add_argument(
@@ -407,11 +470,11 @@ def _build_parser():
     sub = parser.add_subparsers(dest="cmd")
     # apply — install / re-apply the env (interactive if no preset given)
     p_apply = sub.add_parser(
-        "apply", help="install / re-apply the env (interactive if no preset)")
+        "apply", help="install / re-apply, a preset, or adopt a shared setup")
     p_apply.add_argument(
-        "preset", nargs="?",
-        choices=["minimal", "recommended", "everything"], default=None,
-        help="headless preset (skips the wizard); omit for the interactive picker")
+        "source", nargs="?", default=None, metavar="[preset|url|path]",
+        help="a preset (minimal|recommended|everything), a shared setup's git "
+             "URL or path, or omit for the interactive picker")
 
     # status — inspect: drift (default) + diff / health / scan sub-verbs
     p_status = sub.add_parser("status", help="inspect: drift / diff / health / scan")
@@ -442,6 +505,12 @@ def _build_parser():
     p_uninstall.add_argument("--yes", "--non-interactive", dest="yes",
                              action="store_true",
                              help="skip the confirmation prompt")
+
+    # share — export your setup to a portable, base-pure ccpkg.share.json
+    p_share = sub.add_parser(
+        "share", help="export your setup to a shareable ccpkg.share.json")
+    p_share.add_argument("out", nargs="?", default=None,
+                         help="output path (default: ./ccpkg.share.json)")
     return parser
 
 
@@ -453,10 +522,13 @@ def main(argv=None):
         return 2
     root, home, env, os_name = _resolve()
     if args.cmd == "apply":
-        # No preset on a TTY -> interactive wizard; a preset (or a non-TTY) ->
-        # headless. _cmd_install derives that from yes/preset/_stdin_is_tty().
-        return _cmd_install(root, home, env, os_name, yes=False,
-                            reconfigure=False, preset=getattr(args, "preset", None))
+        source = getattr(args, "source", None)
+        # A preset word (or nothing) -> the install/wizard flow; anything else
+        # (a git URL or a path) -> adopt that shared setup.
+        if source is None or source in ("minimal", "recommended", "everything"):
+            return _cmd_install(root, home, env, os_name, yes=False,
+                                reconfigure=False, preset=source)
+        return _cmd_apply_share(root, home, env, os_name, source)
     if args.cmd == "status":
         action = getattr(args, "status_action", None)
         if action == "diff":
@@ -481,5 +553,7 @@ def main(argv=None):
     if args.cmd == "uninstall":
         return _cmd_uninstall(root, home, env, os_name,
                               yes=getattr(args, "yes", False))
+    if args.cmd == "share":
+        return _cmd_share(root, home, env, os_name, getattr(args, "out", None))
     parser.print_help()
     return 2
