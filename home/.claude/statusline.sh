@@ -7,14 +7,15 @@ input=$(cat)
 RESET='\033[0m'
 BOLD='\033[1m'
 DIM='\033[2m'
-FG_MAGENTA='\033[35m'
-FG_GREEN='\033[32m'
-FG_YELLOW='\033[33m'
-FG_RED='\033[31m'
-FG_CYAN='\033[36m'
-FG_WHITE='\033[37m'
-FG_BLUE='\033[34m'
-FG_GRAY='\033[90m'
+# Gruvbox-dark truecolor palette — matches the Claude Code custom theme (bright variants)
+FG_MAGENTA='\033[38;2;211;134;155m'   # purple  #d3869b  (model name)
+FG_GREEN='\033[38;2;184;187;38m'      # green   #b8bb26  (bar low / lines added)
+FG_YELLOW='\033[38;2;250;189;47m'     # yellow  #fabd2f  (bar mid / cost)
+FG_RED='\033[38;2;251;73;52m'         # red     #fb4934  (bar high / removed)
+FG_CYAN='\033[38;2;142;192;124m'      # aqua    #8ec07c  (cache hit rate)
+FG_WHITE='\033[38;2;235;219;178m'     # fg      #ebdbb2  (duration)
+FG_BLUE='\033[38;2;131;165;152m'      # blue    #83a598  (git branch)
+FG_GRAY='\033[38;2;146;131;116m'      # gray    #928374  (separators / labels)
 
 model=$(echo "$input" | jq -r '.model.display_name // "Claude"')
 used_pct=$(echo "$input" | jq -r '.context_window.used_percentage // 0')
@@ -186,7 +187,6 @@ fi
 # Assemble
 SEP=$(printf " ${FG_GRAY}|${RESET} ")
 parts=()
-[ -n "$nuke_str" ]   && parts+=("$nuke_str")
 parts+=("$model_str")
 parts+=("$ctx_str")
 [ -n "$cost_str" ]   && parts+=("$cost_str")
@@ -195,12 +195,10 @@ parts+=("$tokens_str")
 [ -n "$dur_str" ]    && parts+=("$dur_str")
 [ -n "$branch_str" ] && parts+=("$branch_str")
 
-# Strip ANSI escapes to measure visible width
 strip_ansi() {
     printf "%s" "$1" | sed -E $'s/\x1B\\[[0-9;]*m//g'
 }
 
-# Terminal width — fall back to a wide default if tput can't read it
 cols=$(tput cols 2>/dev/null)
 [ -z "$cols" ] || (( cols <= 0 )) && cols=200
 
@@ -217,7 +215,6 @@ for part in "${parts[@]}"; do
         result="$part"
         current_line_len=$part_len
     elif (( current_line_len + sep_len + part_len > cols )); then
-        # Wrap: emit newline instead of separator before this part
         result="${result}"$'\n'"$part"
         current_line_len=$part_len
     else

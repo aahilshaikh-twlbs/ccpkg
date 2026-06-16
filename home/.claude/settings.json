@@ -7,6 +7,7 @@
     "defaultMode": "auto"
   },
   "model": "opus[1m]",
+  "theme": "custom:gruvbox-dark",
   "hooks": {
     "UserPromptSubmit": [
       {
@@ -22,14 +23,6 @@
           {
             "type": "command",
             "command": "[ -f \"$HOME/.claude/mboard/hooks/user_prompt_submit.py\" ] && python3 \"$HOME/.claude/mboard/hooks/user_prompt_submit.py\" || true"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "[ -f \"$HOME/.claude/hooks/nuke.py\" ] && python3 \"$HOME/.claude/hooks/nuke.py\" || true"
           }
         ]
       }
