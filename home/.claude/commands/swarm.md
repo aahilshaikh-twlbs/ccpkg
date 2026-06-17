@@ -6,8 +6,8 @@ description: Fan out a substantive task across N federated Claude leads in iTerm
 
 You (the orchestrator) just received `/swarm <args>`. Pick the right action:
 
-- **`<args>` is a task description** (or empty in an armed-nuke session with a
-  substantive pending task) → DECOMPOSE the task into 2-N parallel sub-tasks
+- **`<args>` is a task description** (or empty with a substantive pending
+  task) → DECOMPOSE the task into 2-N parallel sub-tasks
   along its natural seams (component / layer / concern). For each sub-task pick
   a short lead name like "lead-1" and write a focused sub-task description.
   Then run:

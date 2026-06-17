@@ -196,20 +196,9 @@ fi
 # 8. CLOCK (HH:MM, 24h)
 clock_str=$(printf "${FG_GRAY}%s${RESET}" "$(date +%H:%M)")
 
-# 0. NUKE MODE INDICATOR — gated on THIS session's actual effort (CLAUDE_EFFORT),
-# NOT on settings.json. settings.json says what FUTURE sessions inherit; CLAUDE_EFFORT
-# says what this running session actually is. Showing the indicator everywhere
-# settings.json has ultracode would mislead in pre-arm sessions that aren't actually
-# nuke'd. Indicator now appears only when this session was launched in xhigh effort.
-nuke_str=""
-if [ "${CLAUDE_EFFORT}" = "xhigh" ]; then
-    nuke_str=$(printf "${BOLD}${FG_RED}🔴 NUKE${RESET} ${FG_GRAY}/nuke off when done${RESET}")
-fi
-
 # Assemble — single line, marquee handles overflow.
 SEP=$(printf " ${FG_GRAY}|${RESET} ")
 parts=()
-[ -n "$nuke_str" ]   && parts+=("$nuke_str")
 parts+=("$model_str")
 parts+=("$ctx_str")
 [ -n "$cost_str" ]   && parts+=("$cost_str")
