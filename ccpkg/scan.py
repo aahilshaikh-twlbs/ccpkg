@@ -25,8 +25,30 @@ DEFAULT_PURITY_TERMS = []  # type: List[str]
 # file, not just home/.claude.
 _HOME_PATH_PATTERNS = [r"/Users/[A-Za-z0-9_][^/\s]*", r"/home/[A-Za-z0-9_][^/\s]*"]
 
+# Well-known non-leak home paths: the agent sandbox home, not any real user's
+# machine. Content that documents the Claude execution environment legitimately
+# references it, so it must not trip the home-path leak rule. Real user homes
+# (e.g. /home/<user>, /Users/<name>) are unaffected.
+_HOME_PATH_ALLOW = frozenset(["/home/claude"])
+
 _SECRET_RES = [re.compile(p, re.IGNORECASE) for p in SECRET_PATTERNS]
 _HOME_PATH_RES = [re.compile(p) for p in _HOME_PATH_PATTERNS]
+
+
+def _home_path_allowed(text):
+    # type: (str) -> bool
+    """True if a home-path match is a known non-leak (the agent sandbox home).
+    Tolerates trailing punctuation the greedy [^/\\s]* captures (e.g. a closing
+    backtick in `/home/claude`); a longer username (/home/claudette) is NOT
+    exempt — the char past the allowed prefix must be a non-identifier."""
+    for allowed in _HOME_PATH_ALLOW:
+        if text == allowed:
+            return True
+        if text.startswith(allowed):
+            nxt = text[len(allowed)]
+            if not (nxt.isalnum() or nxt == "_"):
+                return True
+    return False
 
 
 @dataclass
@@ -66,7 +88,7 @@ def scan_text_purity(text, terms, path="", check_home_paths=True):
                 continue
             for regex in _HOME_PATH_RES:
                 match = regex.search(line)
-                if match:
+                if match and not _home_path_allowed(match.group(0)):
                     findings.append(Finding(path=path, line=lineno, rule="purity",
                                             detail=match.group(0)))
                     break

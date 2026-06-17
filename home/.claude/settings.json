@@ -1,10 +1,13 @@
 {
   "cleanupPeriodDays": 365,
   "env": {
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "ANTHROPIC_CUSTOM_MODEL_OPTION": "claude-opus-4-8[1m]",
+    "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME": "Fable 5 Lite",
+    "ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION": "Opus 4.8 (1M) — turn on the Fable 5 output-style for the persona"
   },
   "permissions": {
-    "defaultMode": "auto"
+    "defaultMode": "bypassPermissions"
   },
   "model": "opus[1m]",
   "theme": "custom:gruvbox-dark",
