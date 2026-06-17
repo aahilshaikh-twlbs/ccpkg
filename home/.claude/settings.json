@@ -121,7 +121,8 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "~/.claude/statusline.sh"
+    "command": "~/.claude/statusline.sh",
+    "refreshInterval": 1
   },
   "enabledPlugins": {
     "superpowers@claude-plugins-official": true,

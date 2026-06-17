@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# claude-fable5-lite — launch Claude Code as "Fable 5 Lite":
+#   base model = Claude Opus 4.8
+#   + appended Fable 5 system prompt
+#
+# The /model picker entry is registered via three native env vars the Claude Code
+# binary reads (ANTHROPIC_CUSTOM_MODEL_OPTION{,_NAME,_DESCRIPTION}). The prompt
+# is appended at launch with --append-system-prompt-file; mid-session model
+# switches do NOT swap the prompt — it is locked at session start.
+#
+# Drop the Fable 5 system prompt at $FABLE5_PROMPT_PATH (default below) before
+# first use. The prompt is intentionally not managed by ccpkg.
+
+set -euo pipefail
+
+PROMPT_PATH="${FABLE5_PROMPT_PATH:-$HOME/.claude/prompts/fable-5.md}"
+
+if [[ ! -f "$PROMPT_PATH" ]]; then
+  echo "claude-fable5-lite: prompt file not found at $PROMPT_PATH" >&2
+  echo "Set FABLE5_PROMPT_PATH or place the Fable 5 system prompt at that path." >&2
+  exit 1
+fi
+
+exec env \
+  ANTHROPIC_CUSTOM_MODEL_OPTION="claude-opus-4-8" \
+  ANTHROPIC_CUSTOM_MODEL_OPTION_NAME="Fable 5" \
+  ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION="Anthropic's most intelligent model" \
+  claude \
+    --model claude-opus-4-8 \
+    --system-prompt-file "$PROMPT_PATH" \
+    "$@"

@@ -30,13 +30,16 @@ api_dur_ms=$(echo "$input" | jq -r '.cost.total_api_duration_ms // 0')
 lines_added=$(echo "$input" | jq -r '.cost.total_lines_added // 0')
 lines_removed=$(echo "$input" | jq -r '.cost.total_lines_removed // 0')
 cwd=$(echo "$input" | jq -r '.cwd // ""')
+session_id=$(echo "$input" | jq -r '.session_id // "default"')
 
 # 1. MODEL
 model_str=$(printf "${FG_MAGENTA}${BOLD}%s${RESET}" "$model")
 
-# 1a. COMBINED COST BLOCK: 2026/May/session  $YTD/$MTD/$session
-year_cost_raw=$(~/.claude/yearly-cost.sh 2>/dev/null)
+# 1a. COMBINED COST BLOCK: sesh/dd/ww/mm/yy
+day_cost_raw=$(~/.claude/daily-cost.sh   2>/dev/null)
+week_cost_raw=$(~/.claude/weekly-cost.sh 2>/dev/null)
 month_cost_raw=$(~/.claude/monthly-cost.sh 2>/dev/null)
+year_cost_raw=$(~/.claude/yearly-cost.sh  2>/dev/null)
 
 # 2. CONTEXT BAR
 used_pct_int=${used_pct%.*}
@@ -76,6 +79,18 @@ if [ "$total_cost" != "0" ] && [ "$total_cost" != "null" ] && [ -n "$total_cost"
         cents=$(echo "$total_cost * 100" | bc 2>/dev/null | awk '{printf "%d", $1}')
         cost_amounts+=("${cents}¢")
     fi
+fi
+
+if [ -n "$day_cost_raw" ]; then
+    cost_labels+=("dd")
+    day_fmt=$(printf "%.2f" "$day_cost_raw" 2>/dev/null || echo "$day_cost_raw")
+    cost_amounts+=("\$${day_fmt}")
+fi
+
+if [ -n "$week_cost_raw" ]; then
+    cost_labels+=("ww")
+    week_fmt=$(printf "%.2f" "$week_cost_raw" 2>/dev/null || echo "$week_cost_raw")
+    cost_amounts+=("\$${week_fmt}")
 fi
 
 if [ -n "$month_cost_raw" ]; then
@@ -161,7 +176,7 @@ if (( total_dur_ms > 0 )); then
     fi
 fi
 
-# 7. GIT BRANCH
+# 7. GIT BRANCH (+ dirty marker)
 branch_str=""
 if [ -n "$cwd" ] && [ -d "$cwd" ]; then
     branch=$(git -C "$cwd" --no-optional-locks symbolic-ref --short HEAD 2>/dev/null \
@@ -170,9 +185,16 @@ if [ -n "$cwd" ] && [ -d "$cwd" ]; then
         if (( ${#branch} > 25 )); then
             branch="${branch:0:24}…"
         fi
-        branch_str=$(printf "${FG_BLUE}%s${RESET}" "$branch")
+        dirty=""
+        if [ -n "$(git -C "$cwd" --no-optional-locks status --porcelain 2>/dev/null | head -n 1)" ]; then
+            dirty=$(printf "${FG_YELLOW}*${RESET}")
+        fi
+        branch_str=$(printf "${FG_BLUE}%s${RESET}%s" "$branch" "$dirty")
     fi
 fi
+
+# 8. CLOCK (HH:MM, 24h)
+clock_str=$(printf "${FG_GRAY}%s${RESET}" "$(date +%H:%M)")
 
 # 0. NUKE MODE INDICATOR — gated on THIS session's actual effort (CLAUDE_EFFORT),
 # NOT on settings.json. settings.json says what FUTURE sessions inherit; CLAUDE_EFFORT
@@ -184,9 +206,10 @@ if [ "${CLAUDE_EFFORT}" = "xhigh" ]; then
     nuke_str=$(printf "${BOLD}${FG_RED}🔴 NUKE${RESET} ${FG_GRAY}/nuke off when done${RESET}")
 fi
 
-# Assemble
+# Assemble — single line, marquee handles overflow.
 SEP=$(printf " ${FG_GRAY}|${RESET} ")
 parts=()
+[ -n "$nuke_str" ]   && parts+=("$nuke_str")
 parts+=("$model_str")
 parts+=("$ctx_str")
 [ -n "$cost_str" ]   && parts+=("$cost_str")
@@ -194,33 +217,30 @@ parts+=("$tokens_str")
 [ -n "$lines_str" ]  && parts+=("$lines_str")
 [ -n "$dur_str" ]    && parts+=("$dur_str")
 [ -n "$branch_str" ] && parts+=("$branch_str")
-
-strip_ansi() {
-    printf "%s" "$1" | sed -E $'s/\x1B\\[[0-9;]*m//g'
-}
-
-cols=$(tput cols 2>/dev/null)
-[ -z "$cols" ] || (( cols <= 0 )) && cols=200
-
-sep_visible=" | "
-sep_len=${#sep_visible}
+parts+=("$clock_str")
 
 result=""
-current_line_len=0
 for part in "${parts[@]}"; do
-    part_visible=$(strip_ansi "$part")
-    part_len=${#part_visible}
-
     if [ -z "$result" ]; then
         result="$part"
-        current_line_len=$part_len
-    elif (( current_line_len + sep_len + part_len > cols )); then
-        result="${result}"$'\n'"$part"
-        current_line_len=$part_len
     else
         result="${result}${SEP}${part}"
-        current_line_len=$(( current_line_len + sep_len + part_len ))
     fi
 done
 
-printf "%b\n" "$result"
+# Render the assembled line through the ANSI-aware marquee. If python or the
+# helper is missing, fall back to printing the line as-is and let the terminal
+# truncate — graceful degradation.
+cols=$(tput cols 2>/dev/null)
+[ -z "$cols" ] || (( cols <= 0 )) && cols=200
+
+marquee="$HOME/.claude/statusline-marquee.py"
+state_dir="${TMPDIR:-/tmp}"
+safe_session=$(printf "%s" "$session_id" | tr -c 'A-Za-z0-9._-' '_')
+state_file="${state_dir}/claude-statusline-scroll-${USER:-x}-${safe_session}.state"
+
+if command -v python3 >/dev/null 2>&1 && [ -f "$marquee" ]; then
+    printf "%b" "$result" | python3 "$marquee" --cols "$cols" --state "$state_file"
+else
+    printf "%b\n" "$result"
+fi
