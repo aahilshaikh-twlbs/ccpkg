@@ -22,15 +22,15 @@ used_pct=$(echo "$input" | jq -r '.context_window.used_percentage // 0')
 ctx_size=$(echo "$input" | jq -r '.context_window.context_window_size // 0')
 total_in=$(echo "$input" | jq -r '.context_window.total_input_tokens // 0')
 total_out=$(echo "$input" | jq -r '.context_window.total_output_tokens // 0')
-cache_create=$(echo "$input" | jq -r '.context_window.current_usage.cache_creation_input_tokens // 0')
-cache_read=$(echo "$input" | jq -r '.context_window.current_usage.cache_read_input_tokens // 0')
 total_cost=$(echo "$input" | jq -r '.cost.total_cost_usd // 0')
 total_dur_ms=$(echo "$input" | jq -r '.cost.total_duration_ms // 0')
 api_dur_ms=$(echo "$input" | jq -r '.cost.total_api_duration_ms // 0')
-lines_added=$(echo "$input" | jq -r '.cost.total_lines_added // 0')
-lines_removed=$(echo "$input" | jq -r '.cost.total_lines_removed // 0')
 cwd=$(echo "$input" | jq -r '.cwd // ""')
 session_id=$(echo "$input" | jq -r '.session_id // "default"')
+
+# Per-session state dir, shared by the marquee scroll offset and the pet helper.
+state_dir="${TMPDIR:-/tmp}"
+safe_session=$(printf "%s" "$session_id" | tr -c 'A-Za-z0-9._-' '_')
 
 # 1. MODEL
 model_str=$(printf "${FG_MAGENTA}${BOLD}%s${RESET}" "$model")
@@ -107,54 +107,20 @@ fi
 
 cost_str=""
 if [ "${#cost_labels[@]}" -gt 0 ]; then
-    gray_slash=$(printf "${FG_GRAY}/${RESET}")
-    # Labels: all gray, slashes inherit color
-    IFS=/ labels_joined="${cost_labels[*]}"
-    labels_part=$(printf "${FG_GRAY}%s${RESET}" "$labels_joined")
-    # Amounts: yellow numbers, gray slashes between
-    amounts_part=""
-    for amt in "${cost_amounts[@]}"; do
-        if [ -z "$amounts_part" ]; then
-            amounts_part=$(printf "${FG_YELLOW}%s${RESET}" "$amt")
+    # Interleave each label with its amount so they read as pairs
+    # (sesh $X · dd $Y · ww $Z · …), separated by a gray middot.
+    cost_dot=$(printf "${FG_GRAY} · ${RESET}")
+    for i in "${!cost_labels[@]}"; do
+        pair=$(printf "${FG_GRAY}%s${RESET} ${FG_YELLOW}%s${RESET}" "${cost_labels[$i]}" "${cost_amounts[$i]}")
+        if [ -z "$cost_str" ]; then
+            cost_str="$pair"
         else
-            amounts_part="${amounts_part}${gray_slash}$(printf "${FG_YELLOW}%s${RESET}" "$amt")"
+            cost_str="${cost_str}${cost_dot}${pair}"
         fi
     done
-    cost_str="${labels_part}  ${amounts_part}"
 fi
 
-# 4. TOKEN COUNTS + CACHE HIT RATE
-fmt_tokens() {
-    local n=$1
-    if   (( n >= 1000000 )); then echo "$(echo "$n" | awk '{printf "%.1fM", $1/1000000}')"
-    elif (( n >= 1000 ));    then echo "$(echo "$n" | awk '{printf "%.0fK", $1/1000}')"
-    else                          echo "$n"
-    fi
-}
-in_fmt=$(fmt_tokens "$total_in")
-out_fmt=$(fmt_tokens "$total_out")
-cache_total=$(( total_in + cache_create + cache_read ))
-if (( cache_total > 0 )) && (( cache_read > 0 )); then
-    cache_pct=$(echo "$cache_read $cache_total" | awk '{printf "%d", ($1/$2)*100}')
-    cache_suffix=$(printf " ${FG_CYAN}cache:%d%%${RESET}" "$cache_pct")
-else
-    cache_suffix=""
-fi
-tokens_str=$(printf "${FG_GRAY}in:%s out:%s%s${RESET}" "$in_fmt" "$out_fmt" "$cache_suffix")
-
-# 5. LINES ADDED / REMOVED
-lines_str=""
-if (( lines_added > 0 )) || (( lines_removed > 0 )); then
-    net=$(( lines_added - lines_removed ))
-    if   (( net > 0 )); then net_str="+$net"; net_color="${FG_GREEN}"
-    elif (( net < 0 )); then net_str="$net";  net_color="${FG_RED}"
-    else                     net_str="0";     net_color="${FG_GRAY}"
-    fi
-    lines_str=$(printf "${FG_GREEN}+%d${RESET} ${FG_RED}-%d${RESET} ${DIM}${net_color}(%s)${RESET}" \
-        "$lines_added" "$lines_removed" "$net_str")
-fi
-
-# 6. SESSION DURATION + API WAIT %
+# 4. SESSION DURATION + API WAIT %
 dur_str=""
 if (( total_dur_ms > 0 )); then
     total_sec=$(( total_dur_ms / 1000 ))
@@ -176,37 +142,49 @@ if (( total_dur_ms > 0 )); then
     fi
 fi
 
-# 7. GIT BRANCH (+ dirty marker)
-branch_str=""
+# 7. PROJECT › BRANCH (+ dirty marker)
+proj_branch_str=""
 if [ -n "$cwd" ] && [ -d "$cwd" ]; then
+    toplevel=$(git -C "$cwd" --no-optional-locks rev-parse --show-toplevel 2>/dev/null)
+    if [ -n "$toplevel" ]; then project=$(basename "$toplevel"); else project=$(basename "$cwd"); fi
     branch=$(git -C "$cwd" --no-optional-locks symbolic-ref --short HEAD 2>/dev/null \
              || git -C "$cwd" --no-optional-locks rev-parse --short HEAD 2>/dev/null)
+    (( ${#project} > 30 )) && project="${project:0:29}…"
+    [ -n "$branch" ] && (( ${#branch} > 25 )) && branch="${branch:0:24}…"
+    dirty=""
+    if [ -n "$(git -C "$cwd" --no-optional-locks status --porcelain 2>/dev/null | head -n 1)" ]; then
+        dirty=$(printf "${FG_YELLOW}*${RESET}")
+    fi
     if [ -n "$branch" ]; then
-        if (( ${#branch} > 25 )); then
-            branch="${branch:0:24}…"
-        fi
-        dirty=""
-        if [ -n "$(git -C "$cwd" --no-optional-locks status --porcelain 2>/dev/null | head -n 1)" ]; then
-            dirty=$(printf "${FG_YELLOW}*${RESET}")
-        fi
-        branch_str=$(printf "${FG_BLUE}%s${RESET}%s" "$branch" "$dirty")
+        proj_branch_str=$(printf "${BOLD}${FG_WHITE}%s${RESET}${FG_GRAY} › ${RESET}${FG_BLUE}%s${RESET}%s" "$project" "$branch" "$dirty")
+    elif [ -n "$project" ]; then
+        proj_branch_str=$(printf "${BOLD}${FG_WHITE}%s${RESET}" "$project")
     fi
 fi
 
-# 8. CLOCK (HH:MM, 24h)
-clock_str=$(printf "${FG_GRAY}%s${RESET}" "$(date +%H:%M)")
+# 8. BURN RATE + SESSION PET (stateful helper; fails silent to empty strings)
+burn_str=""
+pet_str=""
+pet_helper="$HOME/.claude/statusline-pet.py"
+if command -v python3 >/dev/null 2>&1 && [ -f "$pet_helper" ]; then
+    pet_state="${state_dir}/claude-statusline-pet-${USER:-x}-${safe_session}.state"
+    pet_tokens=$(( total_in + total_out ))
+    { IFS= read -r burn_str; IFS= read -r pet_str; } < <(
+        python3 "$pet_helper" --state "$pet_state" --tokens "$pet_tokens" \
+            --ctx-pct "$used_pct_int" --dur-ms "$total_dur_ms" 2>/dev/null
+    )
+fi
 
 # Assemble — single line, marquee handles overflow.
 SEP=$(printf " ${FG_GRAY}|${RESET} ")
 parts=()
 parts+=("$model_str")
+[ -n "$proj_branch_str" ] && parts+=("$proj_branch_str")
 parts+=("$ctx_str")
-[ -n "$cost_str" ]   && parts+=("$cost_str")
-parts+=("$tokens_str")
-[ -n "$lines_str" ]  && parts+=("$lines_str")
 [ -n "$dur_str" ]    && parts+=("$dur_str")
-[ -n "$branch_str" ] && parts+=("$branch_str")
-parts+=("$clock_str")
+[ -n "$burn_str" ]   && parts+=("$burn_str")
+[ -n "$cost_str" ]   && parts+=("$cost_str")
+[ -n "$pet_str" ]    && parts+=("$pet_str")
 
 result=""
 for part in "${parts[@]}"; do
@@ -224,8 +202,6 @@ cols=$(tput cols 2>/dev/null)
 [ -z "$cols" ] || (( cols <= 0 )) && cols=200
 
 marquee="$HOME/.claude/statusline-marquee.py"
-state_dir="${TMPDIR:-/tmp}"
-safe_session=$(printf "%s" "$session_id" | tr -c 'A-Za-z0-9._-' '_')
 state_file="${state_dir}/claude-statusline-scroll-${USER:-x}-${safe_session}.state"
 
 if command -v python3 >/dev/null 2>&1 && [ -f "$marquee" ]; then

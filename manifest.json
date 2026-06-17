@@ -5,6 +5,7 @@
     {"path": "CLAUDE.md", "mode": "symlink", "os": "any", "layer": "base", "group": "Core", "desc": "global Claude Code instructions: /graphify trigger + Matt Pocock agent-skills config pointers", "default": true},
     {"path": "statusline.sh", "mode": "symlink", "os": "any", "layer": "base", "group": "Core", "desc": "rich statusline: context bar, sesh/dd/ww/mm/yy cost, tokens, cache %, git branch+dirty, clock — single-line marquee", "default": true},
     {"path": "statusline-marquee.py", "mode": "symlink", "os": "any", "layer": "base", "group": "Core", "desc": "ANSI-aware marquee renderer that scrolls the assembled statusline when it overflows the terminal width", "default": true},
+    {"path": "statusline-pet.py", "mode": "symlink", "os": "any", "layer": "base", "group": "Core", "desc": "stateful statusline helper: live token burn-rate/hr (rolling window + trend) and an evolving tamagotchi session pet (life stages + mood + energy)", "default": true},
     {"path": "daily-cost.sh", "mode": "symlink", "os": "any", "layer": "base", "group": "Core", "desc": "today's Claude spend via ccusage (cached) for the statusline", "default": true},
     {"path": "weekly-cost.sh", "mode": "symlink", "os": "any", "layer": "base", "group": "Core", "desc": "this week's Claude spend (Mon-Sun, ccusage, cached) for the statusline", "default": true},
     {"path": "monthly-cost.sh", "mode": "symlink", "os": "any", "layer": "base", "group": "Core", "desc": "current-month Claude spend via ccusage (cached) for the statusline", "default": true},

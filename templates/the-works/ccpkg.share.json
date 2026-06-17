@@ -61,6 +61,7 @@
     "settings.local.json.tmpl",
     "skills/shannon",
     "statusline-marquee.py",
+    "statusline-pet.py",
     "statusline.sh",
     "superpowers",
     "themes/gruvbox-dark.json",
