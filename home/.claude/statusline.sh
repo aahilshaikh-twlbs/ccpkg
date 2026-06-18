@@ -18,6 +18,12 @@ FG_BLUE='\033[38;2;131;165;152m'      # blue    #83a598  (git branch)
 FG_GRAY='\033[38;2;146;131;116m'      # gray    #928374  (separators / labels)
 
 model=$(echo "$input" | jq -r '.model.display_name // "Claude"')
+ostyle=$(echo "$input" | jq -r '.output_style.name // ""')
+
+# "Fable 5 Lite" = an Opus base wearing the fable-5 output style.
+case "$ostyle" in
+  fable-5) model="Fable 5 Lite (1M)" ;;
+esac
 used_pct=$(echo "$input" | jq -r '.context_window.used_percentage // 0')
 ctx_size=$(echo "$input" | jq -r '.context_window.context_window_size // 0')
 total_in=$(echo "$input" | jq -r '.context_window.total_input_tokens // 0')
